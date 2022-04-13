@@ -45,8 +45,6 @@ SECRET_KEY = config_yaml['django']['secret']
 
 ALLOWED_HOSTS = config_yaml['django']['allowed_hosts']
 
-MESSAGE_TIMEOUT = config_yaml['server']['message_timeout']
-
 LOG_FILE = config_yaml['server']['log_file']
 
 WEBHOOK_URL = f"{WEBHOOK_HOST}:{WEBHOOK_PORT}{WEBHOOK_PATH}"

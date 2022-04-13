@@ -117,56 +117,33 @@ class LinkedMessages(models.Model):
     def get_linked_message_by_name(name: str) -> 'LinkedMessages':
         return LinkedMessages.objects.get(name=name)
 
-
-class FreeAnswerQuiz(models.Model):
-
+class CluedoRooms(models.Model):
     id = models.AutoField(primary_key=True)
 
-    name = models.CharField(max_length=255)
-    question = models.ForeignKey(
-        Message, on_delete=models.SET_NULL, null=True, related_name='question')
+    name = models.CharField(max_length=64,  verbose_name='Название комнаты')
+    def __str__(self):
+        return self.name
 
-    right_answer = models.CharField(max_length=255)
-
-    hint = models.ForeignKey(
-        Message, on_delete=models.SET_NULL, null=True, related_name='hint')
-    wrong_answer_action = models.ForeignKey(
-        Message, on_delete=models.SET_NULL, null=True, related_name='wrong_answer_action')
-    right_answer_action = models.ForeignKey(
-        Message,  on_delete=models.SET_NULL, null=True, related_name='related_primary_manual_roats')
-
-    next_quiz = models.ForeignKey(
-        'FreeAnswerQuiz',  on_delete=models.SET_NULL, null=True, related_name='next_quiz_fk')
-
-    @staticmethod
-    @functools.lru_cache(maxsize=None)
-    def get_quiz_by_name(name: str) -> 'FreeAnswerQuiz':
-        return FreeAnswerQuiz.objects.get(name=name)
-
-    @staticmethod
-    @functools.lru_cache(maxsize=None)
-    def get_quiz_all() -> List['FreeAnswerQuiz']:
-        return FreeAnswerQuiz.objects.all()
-
-    @staticmethod
-    def get_answers_list(quiz: 'FreeAnswerQuiz') -> List[str]:
-        SEPARATOR: str = '#'
-        return quiz.right_answer.split(SEPARATOR)
-
-
-class MagicCommand(models.Model):
+class CluedoPerson(models.Model):
     id = models.AutoField(primary_key=True)
 
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=64,  verbose_name='Имя персонажа')
+    room=models.ForeignKey(CluedoRooms, on_delete=models.CASCADE,  verbose_name='Комната')
+    def __str__(self):
+        return self.name
 
-    command = models.CharField(max_length=255)
+class CluedoPlaces(models.Model):
+    id = models.AutoField(primary_key=True)
 
-    action = models.ForeignKey(
-        Message,  on_delete=models.SET_NULL, null=True)
+    name = models.CharField(max_length=64,  verbose_name='Место преступления')
+    room=models.ForeignKey(CluedoRooms, on_delete=models.CASCADE,  verbose_name='Комната')
+    def __str__(self):
+        return self.name
 
-    unixtime = models.IntegerField(null=True)
+class CluedoWeapon(models.Model):
+    id = models.AutoField(primary_key=True)
 
-    @staticmethod
-    @sync_to_async
-    def get_magic_command_by_name(name: str) -> 'MagicCommand':
-        return MagicCommand.objects.get(name=name)
+    name = models.CharField(max_length=64,  verbose_name='Орудие убийства')
+    room=models.ForeignKey(CluedoRooms, on_delete=models.CASCADE,  verbose_name='Комната')
+    def __str__(self):
+        return self.name
