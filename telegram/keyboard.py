@@ -30,40 +30,74 @@ class SimpleKeyboard(object):
         for r in range(len(markup_rows)):
             keyboard_markup.row(*markup_rows[r])
 
-        return keyboard_markup
+        return keyboard_markup, types.ParseMode.MARKDOWN
 
-
-class QuizKeyboard(object):
-    hint_text: str = "Подсказка"
-    menu_text: str = "В меню"
+class RoomsKeyboard(object):
 
     @staticmethod
-    def get_markup(quiz: models.FreeAnswerQuiz) -> types.ReplyKeyboardMarkup:
-        keyboard: types.ReplyKeyboardMarkup = types.ReplyKeyboardMarkup(
-            resize_keyboard=True)
-        if quiz.hint is not None:
-            keyboard.add(types.KeyboardButton(text=QuizKeyboard.hint_text))
-        keyboard.add(types.KeyboardButton(text=QuizKeyboard.menu_text))
-        return keyboard
+    def get_markup(message: models.Message) -> types.InlineKeyboardMarkup:
+        keyboard_markup, _ = SimpleKeyboard.get_markup(message)
+        rooms = models.CluedoRoom.get_all_rooms()
+        markup_rows = {}
+        for idx, room in enumerate(rooms):
+            r = markup_rows.get(idx, None)
+            if r is None:
+                markup_rows[idx] = []
+            markup_rows[idx].append(types.InlineKeyboardButton(f'Комната: {room.name}', callback_data=f'{{"room": {room.id}}}'))
 
+        for r in range(len(markup_rows)):
+            keyboard_markup.row(*markup_rows[r])
 
-class DashboardKeyboard(object):
-    COLUMN_NUM_SEPARATOR: int = 3
+        return keyboard_markup, types.ParseMode.HTML
+
+class RoomKeyboard(object):
 
     @staticmethod
-    def get_markup(tasks_name: List[str]) -> Union[types.ReplyKeyboardMarkup, types.ReplyKeyboardRemove]:
-        if len(tasks_name) == 0:
-            return types.ReplyKeyboardRemove()
-        keyboard: types.ReplyKeyboardMarkup = types.ReplyKeyboardMarkup(
-            resize_keyboard=True)
+    def get_markup(message: models.Message, room) -> types.InlineKeyboardMarkup:
+        keyboard_markup: types.InlineKeyboardMarkup = types.InlineKeyboardMarkup(
+            row_width=3)
 
-        buttons: List[types.KeyboardButton] = []
+        markup_rows = {0:[], 1:[]}
+        markup_rows[0].append(types.InlineKeyboardButton('СТАРТ', callback_data=f'{{"room": {room.id}}}'))
+        markup_rows[1].append(types.InlineKeyboardButton('выйти из комнаты', callback_data='to_rooms'))
 
-        tasks_name.sort()
-        for i in range(1, len(tasks_name) + 1):
-            buttons.append(types.KeyboardButton(tasks_name[i-1]))
-            if i % DashboardKeyboard.COLUMN_NUM_SEPARATOR == 0 or i == len(tasks_name):
-                keyboard.add(*buttons)
-                buttons = []
+        for r in range(len(markup_rows)):
+            keyboard_markup.row(*markup_rows[r])
 
-        return keyboard
+        return keyboard_markup, types.ParseMode.HTML
+
+
+# class QuizKeyboard(object):
+#     hint_text: str = "Подсказка"
+#     menu_text: str = "В меню"
+
+#     @staticmethod
+#     def get_markup(quiz: models.FreeAnswerQuiz) -> types.ReplyKeyboardMarkup:
+#         keyboard: types.ReplyKeyboardMarkup = types.ReplyKeyboardMarkup(
+#             resize_keyboard=True)
+#         if quiz.hint is not None:
+#             keyboard.add(types.KeyboardButton(text=QuizKeyboard.hint_text))
+#         keyboard.add(types.KeyboardButton(text=QuizKeyboard.menu_text))
+#         return keyboard
+
+
+# class DashboardKeyboard(object):
+#     COLUMN_NUM_SEPARATOR: int = 3
+
+#     @staticmethod
+#     def get_markup(tasks_name: List[str]) -> Union[types.ReplyKeyboardMarkup, types.ReplyKeyboardRemove]:
+#         if len(tasks_name) == 0:
+#             return types.ReplyKeyboardRemove()
+#         keyboard: types.ReplyKeyboardMarkup = types.ReplyKeyboardMarkup(
+#             resize_keyboard=True)
+
+#         buttons: List[types.KeyboardButton] = []
+
+#         tasks_name.sort()
+#         for i in range(1, len(tasks_name) + 1):
+#             buttons.append(types.KeyboardButton(tasks_name[i-1]))
+#             if i % DashboardKeyboard.COLUMN_NUM_SEPARATOR == 0 or i == len(tasks_name):
+#                 keyboard.add(*buttons)
+#                 buttons = []
+
+#         return keyboard

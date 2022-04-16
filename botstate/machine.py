@@ -1,6 +1,8 @@
 import asyncio
+import json
 import logging
 from typing import Optional, List
+from django.db.models import Q
 
 from .states import State
 
@@ -51,6 +53,9 @@ class BotState(object):
     async def get_linked_message(self) -> models.LinkedMessages:
         return models.LinkedMessages.get_linked_message_by_name(self.linked_message_name)
 
+    async def get_rooms(self) -> 'CluedoRooms':
+        return models.CluedoRoom.get_all_rooms()
+
 
 
 class ExitState(BotState):
@@ -63,6 +68,159 @@ class ExitState(BotState):
 
     def _prepare_context(self) -> None:
         self.context: message.ExitContext = message.ExitContext(self.bot)
+
+class RoomsState(BotState):
+    def __init__(self, bot: Bot) -> None:
+        self.bot = bot
+
+        self.linked_message_name = 'ROOMS'
+        self.context: Optional[message.MessageContext] = None
+
+    async def set_context(self) -> None:
+        linked_message: models.LinkedMessages = await self.get_linked_message()
+        self.context = message.RoomsContext(self.bot, linked_message)
+        await self.context.init_context()    
+
+    """
+    возвращает новое состояние объекта в зависимости от текущего 
+    """
+    async def update_state(self, user: models.User, message_payload, message_id):
+        if message_payload ==  'next':
+            user.substate += 1
+            return self
+        elif message_payload == 'prev':
+            user.substate = user.substate - 1 if user.substate > 0 else 0
+            return self
+        elif message_payload == 'home':
+            user.substate = 0
+            return self
+        elif message_payload == 'to_rules':
+            user.state = 'RULES'
+            user.substate = 0
+            state = RulesState(self.bot)
+            await state.set_context()
+            return state
+        elif message_payload == 'to_greeting':
+            user.state = 'GREETING'
+            user.substate = 0
+            state = GreetingState(self.bot)
+            await state.set_context()
+            return state
+        else:
+            try:
+                room = json.loads(message_payload)
+                if room.get('room', 0) > 0:
+                    user.state = 'ROOM'
+                    user.substate = 0
+                    user.room = models.CluedoRoom.get_room_by_id(room['room'])
+                    state = RoomState(self.bot)
+                    await state.set_context()
+                    return state
+                else:
+                    raise ValueError
+            except ValueError as e:
+                return self
+
+
+class RoomState(BotState):
+    def __init__(self, bot: Bot) -> None:
+        self.bot = bot
+
+        self.linked_message_name = 'ROOM'
+        self.context: Optional[message.MessageContext] = None
+
+    async def set_context(self) -> None:
+        linked_message: models.LinkedMessages = await self.get_linked_message()
+        self.context = message.RoomContext(self.bot, linked_message)
+        await self.context.init_context()    
+
+
+    """
+    возвращает новое состояние объекта в зависимости от текущего 
+    """
+    async def update_state(self, user: models.User, message_payload, message_id):
+        if message_payload == 'to_rooms':
+            user.state = 'ROOMS'
+            user.substate = 0
+            user.room = None
+            state = RoomsState(self.bot)
+            await state.set_context()
+            return state
+        else:
+            try:
+                room = json.loads(message_payload)
+                if room.get('room', 0) > 0:
+                    users = await models.User.get_all_players_are_not_ready(user)
+                    if len(users) > 0:
+                        user.state = 'GAME_WAITING'
+                        user.substate = 0
+                        state = GameWaitingState(self.bot)
+                    else:
+                        user.state = 'GAME'
+                        user.substate = 0
+                        state = GameState(self.bot)
+                    await state.set_context()
+                    return state
+                else:
+                    raise ValueError
+            except ValueError as e:
+                return self
+
+class GameWaitingState(BotState):
+    def __init__(self, bot: Bot) -> None:
+        self.bot = bot
+
+        self.linked_message_name = 'GAME_WAITING'
+        self.context: Optional[message.MessageContext] = None
+
+    async def set_context(self) -> None:
+        linked_message: models.LinkedMessages = await self.get_linked_message()
+        self.context = message.GameWaitingContext(self.bot, linked_message)
+        await self.context.init_context()    
+
+    """
+    возвращает новое состояние объекта в зависимости от текущего 
+    """
+    async def update_state(self, user: models.User, message_payload, message_id):
+        if message_payload == 'to_room':
+            user.state = 'ROOM'
+            user.substate = 0
+            state = RoomState(self.bot)
+            await state.set_context()
+            return state
+        elif message_payload == 'to_game':
+            user.state = 'GAME'
+            user.substate = 0
+            state = GameState(self.bot)
+            await state.set_context()
+            return state
+        else:
+            return self
+
+class GameState(BotState):
+    def __init__(self, bot: Bot) -> None:
+        self.bot = bot
+
+        self.linked_message_name = 'GAME'
+        self.context: Optional[message.MessageContext] = None
+
+    async def set_context(self) -> None:
+        linked_message: models.LinkedMessages = await self.get_linked_message()
+        self.context = message.GameContext(self.bot, linked_message)
+        await self.context.init_context()    
+
+    """
+    возвращает новое состояние объекта в зависимости от текущего 
+    """
+    async def update_state(self, user: models.User, message_payload, message_id):
+        if message_payload == 'to_room':
+            user.state = 'ROOM'
+            user.substate = 0
+            state = RoomState(self.bot)
+            await state.set_context()
+            return state
+        else:
+            return self
 
 
 class RulesState(BotState):
@@ -98,6 +256,12 @@ class RulesState(BotState):
             user.state = 'GREETING'
             user.substate = 0
             state = GreetingState(self.bot)
+            await state.set_context()
+            return state
+        elif message_payload == 'to_rooms':
+            user.state = 'ROOMS'
+            user.substate = 0
+            state = RoomsState(self.bot)
             await state.set_context()
             return state
         else:
@@ -138,137 +302,14 @@ class GreetingState(BotState):
             state = RulesState(self.bot)
             await state.set_context()
             return state
+        elif message_payload == 'to_rooms':
+            user.state = 'ROOMS'
+            user.substate = 0
+            state = RoomsState(self.bot)
+            await state.set_context()
+            return state
         else:
             return self
-
-
-# class DashboardState(object):
-#     def __init__(self, bot: Bot) -> None:
-#         self.bot = bot
-
-#         self.previous_state: Optional[State] = None
-#         self.next_state: Optional[str] = State.QUIZ.name
-#         self.default_state: Optional[str] = State.DASHBOARD.name
-#         self.finish_state: Optional[str] = State.WAITING.name
-
-#         self.outcoming_message = 'welcome_menu'
-#         self.finish_message = 'finish'
-
-#         self._prepare_context()
-
-#     def _prepare_context(self) -> None:
-#         self.context: message.DashboardContext = message.DashboardContext(
-#             self.bot)
-
-#     async def _next_state_handler(self, user: models.User, task: str) -> None:
-#         logging.info('The user [chat_id:%d] has moved to state %s', user.chat_id, self.next_state)
-#         user.state = self.next_state
-#         user.substate = None
-#         user.solving_mode = False
-#         user.current_task = task
-#         await user.async_save()
-
-#     async def _finish_state_handler(self, user: models.User) -> None:
-#         logging.info('The user [chat_id:%d] has moved to state %s', user.chat_id, self.finish_state)
-#         user.state = self.finish_state
-#         user.substate = None
-#         user.solving_mode = False
-#         user.current_task = None
-#         await user.async_save()
-
-#     async def incoming_handler(self, user: models.User, text: str, message_id: int) -> None:
-#         result: Optional[str] = await self.context.run_incoming(user, text, message_id)
-#         if result is not None:
-#             await self._next_state_handler(user, result)
-
-#     async def outcoming_handler(self, user: models.User, not_done_tasks: Optional[List[str]] = None) -> None:
-#         message: str = self.outcoming_message
-#         if not_done_tasks is None:
-#             not_done_tasks: List[str] = await self._get_not_done_tasks(user)
-
-#         if len(not_done_tasks) == 0:
-#             await self._finish_state_handler(user)
-#             message = self.finish_message
-#         await self.context.run_outcoming(user, message, not_done_tasks)
-
-#     def _check_corectness(self, text: str, not_done_tasks: List[str]) -> str:
-#         return True if text in not_done_tasks else False
-
-#     async def _get_not_done_tasks(self, user: models.User) -> List[str]:
-#         all_tasks: List[models.FreeAnswerQuiz] = models.FreeAnswerQuiz.get_quiz_all()
-#         return models.User.get_not_done_tasks(user, all_tasks)
-
-#     async def handler(self, user: models.User, text: str, message_id: int, init: bool = False) -> None:
-#         not_done_tasks: List[str] = await self._get_not_done_tasks(user)
-#         if init or not self._check_corectness(text, not_done_tasks):
-#             await self.outcoming_handler(user, not_done_tasks)
-#         else:
-#             await self.incoming_handler(user, text, message_id)
-
-
-# class QuizState(object):
-#     def __init__(self, bot: Bot, user: models.User) -> None:
-#         self.bot = bot
-
-#         self.previous_state: Optional[State] = State.DASHBOARD.name
-
-#         self.task_name: str = user.current_task
-
-#         self.context: Optional[message.QuizContext] = None
-
-#     async def _get_quiz(self, name: str) -> models.FreeAnswerQuiz:
-#         return models.FreeAnswerQuiz.get_quiz_by_name(name)
-
-#     async def set_context(self) -> None:
-#         quiz: models.FreeAnswerQuiz = await self._get_quiz(self.task_name)
-#         self.context = message.QuizContext(self.bot, quiz)
-
-#     async def _back_to_menu(self, user: models.User) -> None:
-#         user.state = self.previous_state
-#         user.solving_mode = False
-#         user.current_task = None
-#         await user.async_save()
-
-#     async def run_oucoming(self, user: models.User) -> None:
-#         await self.context.run_oucoming(user, 'question')
-#         user.solving_mode = True
-#         await user.async_save()
-#         return None
-
-#     async def right_answer_handler(self, user: models.User) -> None:
-#         logging.info('The user [chat_id:%d] solve task: %s', user.chat_id, user.current_task)
-#         solved_task: str = user.current_task
-#         models.User.add_solved_task(user, solved_task)
-#         await self._back_to_menu(user)
-
-#     async def run_incoming(self, user: models.User, test: str) -> Optional[bool]:
-#         text_type: str = await self.context.run_incoming(user, test)
-#         if text_type == 'back':
-#             await self._back_to_menu(user)
-#             return True
-#         elif text_type == 'right_answer':
-#             await self.right_answer_handler(user)
-#             return True
-#         return None
-
-#     async def handler(self, user: models.User, text: str) -> Optional[bool]:
-#         if not user.solving_mode:
-#             return await self.run_oucoming(user)
-#         else:
-#             return await self.run_incoming(user, text)
-
-
-# class WaitingState(object):
-#     def __init__(self, bot: Bot, user: models.User) -> None:
-#         self.bot = bot
-
-#         self._prepare_context()
-
-#     def _prepare_context(self) -> None:
-#         self.context = message.WaitingContext(self.bot)
-
-#     async def handler(self, user: models.User, text: str, message_id: Optional[int]) -> None:
-#         await self.context.run_incoming(user, text, message_id)
 
 
 class Machine(object):
@@ -298,6 +339,18 @@ class Machine(object):
             state = ExitState(self.bot)
         elif user.state == State.RULES.name:
             state = RulesState(self.bot)
+            await state.set_context()
+        elif user.state == State.ROOMS.name:
+            state = RoomsState(self.bot)
+            await state.set_context()
+        elif user.state == State.ROOM.name:
+            state = RoomState(self.bot)
+            await state.set_context()
+        elif user.state == State.GAME_WAITING.name:
+            state = GameWaitingState(self.bot)
+            await state.set_context()
+        elif user.state == State.GAME.name:
+            state = GameState(self.bot)
             await state.set_context()
         else:
             state = GreetingState(self.bot)

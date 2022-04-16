@@ -13,14 +13,24 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
+            name='CluedoRoom',
+            fields=[
+                ('id', models.AutoField(primary_key=True, serialize=False)),
+                ('name', models.CharField(max_length=64, verbose_name='Название комнаты')),
+            ],
+        ),
+
+        migrations.CreateModel(
             name='User',
             fields=[
                 ('id', models.AutoField(primary_key=True, serialize=False)),
-                ('name', models.CharField(max_length=255)),
-                ('telegram_id', models.IntegerField()),
-                ('state', models.CharField(max_length=255)),
-                ('substate', models.IntegerField(null=True)),
-                ('chat_id', models.IntegerField(null=True)),
+                ('name', models.CharField(max_length=255, verbose_name='Имя пользователя')),
+                ('telegram_id', models.CharField(max_length=255, null=True, verbose_name='id пользователя в Telegram')),
+                ('state', models.CharField(max_length=255, verbose_name='Статус')),
+                ('substate', models.IntegerField(null=True, verbose_name='Подстатус')),
+                ('chat_id', models.IntegerField(null=True, verbose_name='Чат')),
+                ('room', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='data.cluedoroom', verbose_name='Комната')),
+            
             ],
         ),
 
@@ -30,20 +40,46 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(primary_key=True, serialize=False)),
                 ('name', models.CharField(max_length=255)),
                 ('group', models.CharField(max_length=255, null=True)),
-                ('actions', models.TextField()),
+                # ('actions', models.TextField(max_length=4095, null=True)),
             ],
         ),
+
         migrations.CreateModel(
             name='Message',
             fields=[
                 ('id', models.AutoField(primary_key=True, serialize=False)),
                 ('name', models.CharField(max_length=255)),
-                ('text_content', models.TextField()),
-                ('media_name', models.CharField(max_length=255)),
+                ('text_content', models.TextField(null=True)),
+                ('media_name', models.CharField(max_length=255, null=True)),
                 ('group', models.CharField(max_length=255, null=True)),
                 ('order', models.IntegerField(null=True)),
-                ('actions', models.TextField()),
+                ('actions', models.TextField(null=True)),
             ],
         ),
-        
+
+        migrations.CreateModel(
+            name='CluedoWeapon',
+            fields=[
+                ('id', models.AutoField(primary_key=True, serialize=False)),
+                ('name', models.CharField(max_length=64, verbose_name='Орудие убийства')),
+                ('room', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='data.cluedoroom', verbose_name='Комната')),
+            ],
+        ),
+        migrations.CreateModel(
+            name='CluedoPlace',
+            fields=[
+                ('id', models.AutoField(primary_key=True, serialize=False)),
+                ('name', models.CharField(max_length=64, verbose_name='Место преступления')),
+                ('room', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='data.cluedoroom', verbose_name='Комната')),
+            ],
+        ),
+        migrations.CreateModel(
+            name='CluedoPerson',
+            fields=[
+                ('id', models.AutoField(primary_key=True, serialize=False)),
+                ('name', models.CharField(max_length=64, verbose_name='Имя персонажа')),
+                ('room', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='data.cluedoroom', verbose_name='Комната')),
+            ],
+        ),
+
     ]
