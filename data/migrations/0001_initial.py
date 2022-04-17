@@ -13,10 +13,22 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
+            name='CluedoGame',
+            fields=[
+                ('id', models.AutoField(primary_key=True, serialize=False)),
+                ('started_at', models.DateTimeField(auto_now_add=True, verbose_name='Начало игры')),
+                ('finished_at', models.DateTimeField(null=True, verbose_name='Окончание игры')),
+                ('secret', models.TextField(max_length=1023, verbose_name='Загадка игры (кто, место, орудие)')),
+                ('distances', models.TextField(max_length=1023, verbose_name='Расстояния между помещениями')),
+            ],
+        ),
+
+        migrations.CreateModel(
             name='CluedoRoom',
             fields=[
                 ('id', models.AutoField(primary_key=True, serialize=False)),
                 ('name', models.CharField(max_length=64, verbose_name='Название комнаты')),
+                ('game', models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='data.cluedogame', verbose_name='Игра в комнате')),
             ],
         ),
 
@@ -30,6 +42,7 @@ class Migration(migrations.Migration):
                 ('substate', models.IntegerField(null=True, verbose_name='Подстатус')),
                 ('chat_id', models.IntegerField(null=True, verbose_name='Чат')),
                 ('room', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='data.cluedoroom', verbose_name='Комната')),
+                ('last_message_id', models.CharField(max_length=64, blank=True, null=True, verbose_name='ID последнего сообщения пользователя в Telegram')),
             
             ],
         ),

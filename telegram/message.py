@@ -1,21 +1,26 @@
 import os
+import json
 import logging
 import random
 from typing import List, Optional, Dict, Union
 
 from aiogram import Bot, types
-
+from django.db.models import Q
 import settings
 from .keyboard import RoomKeyboard, RoomsKeyboard, SimpleKeyboard #, QuizKeyboard, DashboardKeyboard
 from botstate import states
 from utils import MediaCache
 from data import models
+from cluedo.game import Game
 
 
 class BaseContext(object):
     def __init__(self):
         self.bot: Optional[Bot] = None
         self.media_cache: MediaCache = MediaCache()
+
+    async def update(self, user: models.User, message_payload: Optional[str] = None, message_id: Optional[int] = None):
+        pass
 
     def _get_media(self, message: models.Message) -> Optional[Union[types.InputFile, str]]:
         if message.media_name is None:
@@ -31,6 +36,12 @@ class BaseContext(object):
             logging.error("static file %s not found.", message.media_name)
             return None
         return media_file
+
+    async def send_msg(self, chat_id, message_id, text, keyboard, mode):
+        try:
+            await self.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=keyboard, parse_mode=mode)
+        except:
+            await self.bot.send_message(chat_id=chat_id, text=text, reply_markup=keyboard, parse_mode=mode)
 
     def _update_media_cache(self, message: models.Message, response) -> None:
         # -1 for get photo with best quality
@@ -64,11 +75,7 @@ class ExitContext(BaseContext):
         await self._clear_keyboard_and_text(user, message_id)
 
     async def _clear_keyboard_and_text(self, user: models.User, message_id: int) -> None:
-        chat_id: int = user.chat_id
-        try:
-            await self.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text= 'Bye!', reply_markup=None)
-        except:
-            await self.bot.send_message(chat_id=chat_id, text='Bye!', reply_markup=None)
+        await self.send_msg(user.chat_id, message_id, 'Bye!', None, None)
 
 
 class MessageContext(BaseContext):
@@ -91,23 +98,15 @@ class MessageContext(BaseContext):
         return self.message_list[substate]
 
     async def send_message(self, user: models.User, message: models.Message, message_id: Optional[int]) -> None:
-        chat_id: int = user.chat_id
         text: str = message.text_content
         keyboard, mode = SimpleKeyboard.get_markup(message)
-        try:
-            await self.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=keyboard, parse_mode=mode)
-        except:
-            await self.bot.send_message(chat_id=chat_id, text=text, reply_markup=keyboard, parse_mode=mode)
+        await self.send_msg(user.chat_id, message_id, text, keyboard, mode)
 
 class RoomsContext(MessageContext):
     async def send_message(self, user: models.User, message: models.Message, message_id: Optional[int]) -> None:
-        chat_id: int = user.chat_id
         text: str = message.text_content
         keyboard, mode = RoomsKeyboard.get_markup(message)
-        try:
-            await self.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=keyboard, parse_mode=mode)
-        except:
-            await self.bot.send_message(chat_id=chat_id, text=text, reply_markup=keyboard, parse_mode=mode)
+        await self.send_msg(user.chat_id, message_id, text, keyboard, mode)
 
 class RoomContext(MessageContext):
 
@@ -119,15 +118,12 @@ class RoomContext(MessageContext):
             return random.choice(['пусто', 'пустота', 'никогошеньки', 'нет игроков'])
 
     async def send_message(self, user: models.User, message: models.Message, message_id: Optional[int]) -> None:
-        chat_id: int = user.chat_id
-        text: str = f"""    Комната: {user.room.name}
-    В комнате: {self._get_users_in_room(user.room)}
-    {message.text_content}"""
+        text: str = f"Комната: {user.room.name}" + '\n'+ \
+                    f"В комнате: {self._get_users_in_room(user.room)}" + '\n' + \
+                    f"{message.text_content}"
+
         keyboard, mode = RoomKeyboard.get_markup(message, user.room)
-        try:
-            await self.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=keyboard, parse_mode=mode)
-        except:
-            await self.bot.send_message(chat_id=chat_id, text=text, reply_markup=keyboard, parse_mode=mode)
+        await self.send_msg(user.chat_id, message_id, text, keyboard, mode)
 
 class GameWaitingContext(MessageContext):
 
@@ -139,39 +135,51 @@ class GameWaitingContext(MessageContext):
             return random.choice(['пусто', 'пустота', 'никогошеньки', 'нет игроков'])
 
     async def send_message(self, user: models.User, message: models.Message, message_id: Optional[int]) -> None:
-        chat_id: int = user.chat_id
         users = list(await models.User.get_all_players_are_not_ready(user))
         users_text = ', '.join(map(lambda x: x.name, users))
-        text: str = f"""    Комната: {user.room.name}
-    В комнате: {self._get_users_in_room(user.room)}
-    Ожидаем: {users_text}
-    {message.text_content}"""
-        keyboard, mode = SimpleKeyboard.get_markup(message)
-        try:
-            await self.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=keyboard, parse_mode=mode)
-        except:
-            await self.bot.send_message(chat_id=chat_id, text=text, reply_markup=keyboard, parse_mode=mode)
+        text: str = f"Комната: {user.room.name}" + '\n' + \
+                    f"В комнате: {self._get_users_in_room(user.room)}" + '\n' + \
+                    f"Ожидаем: {users_text}" + '\n' + \
+                    f"{message.text_content}"
+
+        keyboard, mode = SimpleKeyboard.get_markup(message, user.room)
+        await self.send_msg(user.chat_id, message_id, text, keyboard, mode)
 
 class GameContext(MessageContext):
+    def __init__(self, bot: Bot, linked_message: models.LinkedMessages) -> None:
+        super().__init__(bot, linked_message)
+        self.game: Game = None
 
-    def _get_users_in_room(self, room):
-        users = list(models.User.objects.filter(room=room))
+    def _get_users_in_room(self, users):
         if users:
             return ', '.join(map(lambda x: x.name, users))
         else:
             return random.choice(['пусто', 'пустота', 'никогошеньки', 'нет игроков'])
 
     async def send_message(self, user: models.User, message: models.Message, message_id: Optional[int]) -> None:
-        chat_id: int = user.chat_id
-        text: str = f"""    Комната: {user.room.name}
-    В комнате: {self._get_users_in_room(user.room)}
-    {message.text_content}"""
-        keyboard, mode = SimpleKeyboard.get_markup(message)
-        try:
-            await self.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=keyboard, parse_mode=mode)
-        except:
-            await self.bot.send_message(chat_id=chat_id, text=text, reply_markup=keyboard, parse_mode=mode)
+        users = list(models.User.objects.filter(Q(room=user.room) & ~Q(name=user.name)))
+        text: str = f"Комната: {user.room.name}" + '\n' + \
+                    f"В комнате: {self._get_users_in_room([*users, user])}" + '\n' + \
+                    f"{message.text_content}"
 
+        keyboard, mode = SimpleKeyboard.get_markup(message)
+        for u in users:
+            await self.send_msg(u.chat_id, u.last_message_id, text, keyboard, mode)
+        await self.send_msg(user.chat_id, message_id, text, keyboard, mode)
+
+    async def update(self, user: models.User, message_payload: Optional[str] = None, message_id: Optional[int] = None):
+        cluedo_game: models.CluedoGame = user.room.game
+        if cluedo_game is None:
+            self.game = Game(user.room)
+            self.game.create()
+            cluedo_game = await models.CluedoGame.create(user.room, json.dumps(self.game.secret), self.game.place_distances)
+            user.room.game = cluedo_game
+            await user.room.async_save()
+        else:
+            self.game = Game(user.room)
+            self.game.from_model(cluedo_game)
+        
+        
 
 # class QuizContext(BaseContext):
 #     def __init__(self, bot: Bot, primary_quiz: models.FreeAnswerQuiz) -> None:

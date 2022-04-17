@@ -26,7 +26,9 @@ class BotState(object):
     """
     обработчик события в данном состоянии
     """
-    async def handler(self, user: models.User, message_payload: Optional[int] = None, message_id: Optional[int] = None, outcoming_flag: bool = False) -> Optional[bool]:
+    async def handler(self, user: models.User, message_payload: Optional[str] = None, message_id: Optional[int] = None, outcoming_flag: bool = False) -> Optional[bool]:
+        if self.context:
+            await self.context.update(user, message_payload, message_id)
         return await self.send_and_save(user, message_payload, message_id)
 
     """
@@ -37,6 +39,7 @@ class BotState(object):
         user_substate: int = self.get_user_current_substate(user)
         message: models.Message = self.context.get_message(user_substate)
         await self.context.send_message(user, message, message_id)
+        user.last_message_id=message_id
         await user.async_save()
         return None
 
@@ -159,6 +162,7 @@ class RoomState(BotState):
                         user.state = 'GAME'
                         user.substate = 0
                         state = GameState(self.bot)
+
                     await state.set_context()
                     return state
                 else:
