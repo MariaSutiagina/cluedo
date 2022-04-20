@@ -36,10 +36,10 @@ class Player:
         return cu.cards_to_json(self.known_cards)
 
     def get_cards_info(self):
-        return 'Мои карты:' + ''.join(map(lambda x: f"{x.type}:{x.name}", cu.cards_to_info(self.cards)))
+        return 'Мои карты:' + ', '.join(map(lambda x: f"{x['type']}:{x['name']}", cu.cards_to_info(self.cards)))
 
     def get_known_cards_info(self):
-        return 'Известные мне карты:' + ''.join(map(lambda x: f"{x.type}:{x.name}", cu.cards_to_info(self.known_cards)))
+        return 'Известные мне карты:' + ', '.join(map(lambda x: f"{x['type']}:{x['name']}", cu.cards_to_info(self.known_cards)))
 
 class Game:
     def __init__(self, user: models.User):
@@ -48,6 +48,7 @@ class Game:
         self.secret: Dict = None
         self.place_distances: Distances = None
         self.players = None
+        self.opencards = None
         # self.messages_content = ""
         
         self.won = False
@@ -63,13 +64,16 @@ class Game:
         self.am_open = (0, 0, 0, 0, 0, 0)
         self.secret = {'person': rd.choice(self.field.people), 'weapon': rd.choice(self.field.weapons), 'place': rd.choice(self.field.places)}
         self.place_distances = Distances.new_dist()
-        self.cards = rd.shuffle(self.field.cards())
+        self.cards = self.field.cards()
+        rd.shuffle(self.cards)
 
-        self.players = []
-        for p in rd.shuffle(models.User.objects.filter(room=self.user.room)):
+        self.players: List[Player] = []
+        users: List[models.User] = list(models.User.objects.filter(room=self.user.room))
+        rd.shuffle(users)
+        for p in users:
             self.players.append(Player(p))
 
-        for c in self.cards:
+        for c in self.secret.values():
             self.cards.remove(c)
 
         self.alive = len(self.players)
@@ -98,18 +102,21 @@ class Game:
         
     def get_general_game_info(self):
         return "Карты в игре:" + '\n\t' + \
-                 "      Подозреваемые:" + ', '.join(self.field.get_people()) + '\n\t' + \
-                 "      Места:" + ', '.join(self.field.get_places())  + '\n\t' + \
-                 "      Орудия:" + ', '.join(self.field.get_weapons())  + '\n'
+                 "      Подозреваемые:" + ', '.join(map(lambda x: x.name, self.field.get_people())) + '\n\t' + \
+                 "      Места:" + ', '.join(map(lambda x: x.name, self.field.get_places()))  + '\n\t' + \
+                 "      Орудия:" + ', '.join(map(lambda x: x.name, self.field.get_weapons()))  + '\n'
 
     def get_open_cards_info(self):
         if self.opencards:
-            return "Известные всем карты:" + ', '.join(self.opencards)
+            return "Известные всем карты:" + ', '.join(map(lambda x: x.name, self.opencards))
         else:
             return "Нет известных всем карт"
 
+    def get_secret(self):
+        return json.dumps({'person': self.secret['person'].id, 'weapon': self.secret['weapon'].id, 'place': self.secret['place'].id})
+
     def get_open_cards(self):
-        return cu.cards_to_json(self.open_cards)
+        return cu.cards_to_json(self.opencards)
 
     def get_player(self, user: models.User):
         for p in self.players:

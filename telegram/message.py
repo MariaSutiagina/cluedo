@@ -115,40 +115,45 @@ class RoomsContext(MessageContext):
 
 class RoomContext(MessageContext):
 
-    def _get_users_in_room(self, room):
-        users = list(models.User.objects.filter(room=room))
+    def _get_users(self, user):
+        users = list(models.User.objects.filter(room=user.room))
         if users:
-            return ', '.join(map(lambda x: x.name, users))
+            return ', '.join(list(map(lambda x: x.name, users)) + [user.name, ])
         else:
-            return random.choice(['пусто', 'пустота', 'никогошеньки', 'нет игроков'])
+            return user.name
 
     async def send_message(self, user: models.User, message: models.Message, message_id: Optional[int]) -> None:
+        users = list(models.User.objects.filter(Q(room=user.room) & ~Q(name=user.name)))
         text: str = f"Комната: {user.room.name}" + '\n'+ \
-                    f"В комнате: {self._get_users_in_room(user.room)}" + '\n' + \
+                    f"В комнате: {self._get_users(user)}" + '\n' + \
                     f"{message.text_content}"
 
         keyboard, mode = RoomKeyboard.get_markup(message, user.room)
         await self.send_msg(user.chat_id, message_id, text, keyboard, mode)
+        for u in users:
+            await self.send_msg(u.chat_id, u.last_message_id, text, keyboard, mode)
 
 class GameWaitingContext(MessageContext):
 
-    def _get_users_in_room(self, room):
-        users = list(models.User.objects.filter(room=room))
+    def _get_users(self, user):
+        users = list(models.User.objects.filter(room=user.room))
         if users:
             return ', '.join(map(lambda x: x.name, users))
         else:
-            return random.choice(['пусто', 'пустота', 'никогошеньки', 'нет игроков'])
+            return user.name
 
     async def send_message(self, user: models.User, message: models.Message, message_id: Optional[int]) -> None:
         users = list(await models.User.get_all_players_are_not_ready(user))
         users_text = ', '.join(map(lambda x: x.name, users))
         text: str = f"Комната: {user.room.name}" + '\n' + \
-                    f"В комнате: {self._get_users_in_room(user.room)}" + '\n' + \
+                    f"В комнате: {self._get_users(user)}" + '\n' + \
                     f"Ожидаем: {users_text}" + '\n' + \
                     f"{message.text_content}"
 
-        keyboard, mode = SimpleKeyboard.get_markup(message, user.room)
+        keyboard, mode = SimpleKeyboard.get_markup(message)
         await self.send_msg(user.chat_id, message_id, text, keyboard, mode)
+        # for u in users:
+        #     await self.send_msg(u.chat_id, u.last_message_id, text, keyboard, mode)
 
 class GameContext(MessageContext):
     def __init__(self, bot: Bot, linked_message: models.LinkedMessages) -> None:
@@ -169,50 +174,53 @@ class GameContext(MessageContext):
                     f"{self.game.get_open_cards_info()}" + '\n'
         
         player_turn: Player = self.game.get_player_whos_turn()
-        turn_message = f'ХОД ИГРОКА {player_turn.alias.name} ({player_turn.user.name})'+'\n'+f'ЖДЕМ ХОДА {player_turn.alias.name} ({player_turn.user.name}'
+        turn_message = f'ХОД ИГРОКА {player_turn.alias.name} ({player_turn.user.name})'+'\n'+f'ЖДЕМ ХОДА {player_turn.alias.name} ({player_turn.user.name})'
 
         keyboard, mode = SimpleKeyboard.get_markup(message)
         for u in users:
-            player: Player = self.game.get_player(user)
+            player: Player = self.game.get_player(u)
             msg_text: str = text + \
-                player.get_cards_info() + '\n' + \
+                player.get_cards_info() + '\n\n' + \
                 player.get_known_cards_info() + '\n\n' + \
+                f"ТЫ: {player.alias.name} ({player.user.name})" + '\n' + \
                 turn_message
             await self.send_msg(u.chat_id, u.last_message_id, msg_text, keyboard, mode)
 
         player: Player = self.game.get_player(user)
         msg_text: str = text + \
-            player.get_cards_info() + '\n' + \
+            player.get_cards_info() + '\n\n' + \
             player.get_known_cards_info() + '\n\n' + \
+            f"ТЫ: {player.alias.name} ({player.user.name})" + '\n' + \
             turn_message
         await self.send_msg(user.chat_id, message_id, msg_text, keyboard, mode)
 
     async def persist_game(self, user: models.User):
         cluedo_game = await models.CluedoGame.create(
-            room=user.room, 
-            winner=self.game.winner,
-            secret=json.dumps(self.game.secret), 
-            open_cards = self.game.get_open_cards(),
-            distances = self.game.place_distances,
-            started=True,
-            alive=self.game.alive,
-            won=self.game.won,
-            asking=self.game.asking,
-            accusing=self.game.accusing,
-            asked=self.game.asked,
-            choose_place=self.game.choose_place,
-            turn_number=self.game.turn_number
+            user.room, 
+            self.game.winner,
+            self.game.get_secret(), 
+            self.game.place_distances,
+            self.game.get_open_cards(),
+            True,
+            self.game.alive,
+            self.game.won,
+            self.game.asking,
+            self.game.accusing,
+            self.game.asked,
+            self.game.choose_place,
+            self.game.turn_number
             )
 
         for p in self.game.players:
             await models.CluedoPlayer.create(
-                game=cluedo_game, 
-                user=user,
-                place=p.place,
-                alias=p.alias,
-                alive=p.alive,
-                cards=p.get_cards(),
-                known_cards=p.get_known_cards()
+                user,
+                cluedo_game, 
+                p.number,
+                p.place,
+                p.alias,
+                p.alive,
+                p.get_cards(),
+                p.get_known_cards()
             )
 
         user.room.game = cluedo_game

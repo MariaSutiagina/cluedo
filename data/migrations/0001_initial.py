@@ -156,7 +156,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(primary_key=True, serialize=False)),
                 ('alive', models.BooleanField(default=True, verbose_name='игрок жив')),
-                ('number', models.BooleanField(default=-1, verbose_name='номер игрока в порядке хода')),
+                ('number', models.IntegerField(default=-1, verbose_name='номер игрока в порядке хода')),
                 ('known_cards', models.TextField(blank=True, max_length=1023, null=True, verbose_name='Известные игроку карты')),
                 ('cards', models.TextField(blank=True, max_length=1023, null=True, verbose_name='карты игрока')),
                 ('alias', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='data.cluedoperson', verbose_name='игровой псевдоним игрока')),

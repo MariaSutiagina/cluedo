@@ -34,9 +34,9 @@ class CluedoGame(models.Model):
         game: 'CluedoGame' = cls()
         game.room = room
         game.winner = winner
-        game.distances = distances
         game.secret = secret
         game.open_cards = open_cards
+        game.distances = distances
         game.started = started
         game.alive = alive
         game.won = won
@@ -57,7 +57,7 @@ class CluedoPlayer(models.Model):
     id = models.AutoField(primary_key=True)
 
     alive = models.BooleanField(default=True, verbose_name='игрок жив')
-    number = models.BooleanField(default=-1, verbose_name='номер игрока в порядке хода')
+    number = models.IntegerField(default=-1, verbose_name='номер игрока в порядке хода')
     known_cards = models.TextField(max_length=1023, null=True, blank=True, verbose_name='Известные игроку карты')
     cards = models.TextField(max_length=1023, null=True, blank=True, verbose_name='карты игрока')
 
@@ -69,11 +69,12 @@ class CluedoPlayer(models.Model):
 
     @classmethod
     @sync_to_async
-    def create(cls, user: 'User'=None, game: CluedoGame=None, place: 'CluedoPlace'=None, alias: 'CluedoPerson'=None, alive:bool = True, 
+    def create(cls, user: 'User'=None, game: CluedoGame=None, number:int=-1, place: 'CluedoPlace'=None, alias: 'CluedoPerson'=None, alive:bool = True, 
                     cards: str='', known_cards: str=''):
         player: 'CluedoPlayer' = cls()
         player.user = user
         player.game = game
+        player.number = number
         player.place = place
         player.alias = alias
         player.alive = alive
@@ -126,6 +127,7 @@ class CluedoPerson(models.Model):
 
     def __str__(self):
         return self.name
+
 
 class CluedoPlace(models.Model):
     id = models.AutoField(primary_key=True)
