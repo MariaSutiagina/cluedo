@@ -19,6 +19,7 @@ class Distances:
                     r.append([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
                 r[i][j] = rd.randint(1,10)
                 r[j][i] = r[i][j]
+        r[9][9] = 0
         return Distances(r)
 
     @staticmethod

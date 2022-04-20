@@ -103,7 +103,7 @@ insert into data_message(name, text_content, media_name, "group", "order", actio
  10, 
  '{"R0:C0":{"type":"button", "name":"Прервать ожидание", "action":"to_room"}}'),
 ('010-game-waiting', 
- 'ИГРАЕМ',
+ '',
  '010-game_waiting.jpg', 
  'game', 
  10, 

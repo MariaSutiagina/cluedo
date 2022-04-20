@@ -11,7 +11,7 @@ from .keyboard import RoomKeyboard, RoomsKeyboard, SimpleKeyboard #, QuizKeyboar
 from botstate import states
 from utils import MediaCache
 from data import models
-from cluedo.game import Game
+from cluedo.game import Game, Player
 
 
 class BaseContext(object):
@@ -42,6 +42,11 @@ class BaseContext(object):
             await self.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=keyboard, parse_mode=mode)
         except:
             await self.bot.send_message(chat_id=chat_id, text=text, reply_markup=keyboard, parse_mode=mode)
+
+    async def send_all(self, users, message_id, text, keyboard, mode):
+        for u in users:
+            await self.send_msg(u.chat_id, u.last_message_id, text, keyboard, mode)
+
 
     def _update_media_cache(self, message: models.Message, response) -> None:
         # -1 for get photo with best quality
@@ -160,23 +165,67 @@ class GameContext(MessageContext):
         users = list(models.User.objects.filter(Q(room=user.room) & ~Q(name=user.name)))
         text: str = f"Комната: {user.room.name}" + '\n' + \
                     f"В комнате: {self._get_users_in_room([*users, user])}" + '\n' + \
-                    f"{message.text_content}"
+                    f"{self.game.get_general_game_info()}" + '\n' + \
+                    f"{self.game.get_open_cards_info()}" + '\n'
+        
+        player_turn: Player = self.game.get_player_whos_turn()
+        turn_message = f'ХОД ИГРОКА {player_turn.alias.name} ({player_turn.user.name})'+'\n'+f'ЖДЕМ ХОДА {player_turn.alias.name} ({player_turn.user.name}'
 
         keyboard, mode = SimpleKeyboard.get_markup(message)
         for u in users:
-            await self.send_msg(u.chat_id, u.last_message_id, text, keyboard, mode)
-        await self.send_msg(user.chat_id, message_id, text, keyboard, mode)
+            player: Player = self.game.get_player(user)
+            msg_text: str = text + \
+                player.get_cards_info() + '\n' + \
+                player.get_known_cards_info() + '\n\n' + \
+                turn_message
+            await self.send_msg(u.chat_id, u.last_message_id, msg_text, keyboard, mode)
 
+        player: Player = self.game.get_player(user)
+        msg_text: str = text + \
+            player.get_cards_info() + '\n' + \
+            player.get_known_cards_info() + '\n\n' + \
+            turn_message
+        await self.send_msg(user.chat_id, message_id, msg_text, keyboard, mode)
+
+    async def persist_game(self, user: models.User):
+        cluedo_game = await models.CluedoGame.create(
+            room=user.room, 
+            winner=self.game.winner,
+            secret=json.dumps(self.game.secret), 
+            open_cards = self.game.get_open_cards(),
+            distances = self.game.place_distances,
+            started=True,
+            alive=self.game.alive,
+            won=self.game.won,
+            asking=self.game.asking,
+            accusing=self.game.accusing,
+            asked=self.game.asked,
+            choose_place=self.game.choose_place,
+            turn_number=self.game.turn_number
+            )
+
+        for p in self.game.players:
+            await models.CluedoPlayer.create(
+                game=cluedo_game, 
+                user=user,
+                place=p.place,
+                alias=p.alias,
+                alive=p.alive,
+                cards=p.get_cards(),
+                known_cards=p.get_known_cards()
+            )
+
+        user.room.game = cluedo_game
+        await user.room.async_save()
+        
     async def update(self, user: models.User, message_payload: Optional[str] = None, message_id: Optional[int] = None):
         cluedo_game: models.CluedoGame = user.room.game
         if cluedo_game is None:
-            self.game = Game(user.room)
+            self.game = Game(user)
             self.game.create()
-            cluedo_game = await models.CluedoGame.create(user.room, json.dumps(self.game.secret), self.game.place_distances)
-            user.room.game = cluedo_game
-            await user.room.async_save()
+            await self.persist_game(user)
         else:
-            self.game = Game(user.room)
+            self.game = Game(user)
             self.game.from_model(cluedo_game)
         
         

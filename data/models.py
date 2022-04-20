@@ -13,17 +13,75 @@ class CluedoGame(models.Model):
     finished_at = models.DateTimeField(verbose_name='Окончание игры', null=True)
 
     distances = models.TextField(max_length=1023, blank=True, null=True, verbose_name='Расстояния между помещениями')
+    secret = models.TextField(max_length=1023, null=True, blank=True, verbose_name='Загадка игры (кто, место, орудие) в формате {"person": id, "place": id, "weapon": id}')
+    open_cards = models.TextField(max_length=1023, null=True, blank=True, verbose_name='Открытые в процессе игры карты в формате {"<type>": id}, где type = person, place, weapon')
+    alive = models.IntegerField(default=-1, verbose_name='осталось игроков')
+    started = models.BooleanField(default=False, verbose_name='игра началась')
+    won = models.BooleanField(default=False, verbose_name=' Победа в игре')
+    asking = models.BooleanField(default=False, verbose_name='Вопрос задается')
+    asked = models.BooleanField(default=False, verbose_name='Вопрос задан')
+    accusing = models.BooleanField(default=False, verbose_name='Обвинение')
+    choose_place = models.BooleanField(default=False, verbose_name='выбор места')
+    turn_number = models.IntegerField(default=-1, verbose_name='')
     winner = models.ForeignKey('User', on_delete=models.CASCADE, blank=True, null=True, verbose_name='Победитель')
-    secret = models.TextField(max_length=1023, verbose_name='Загадка игры (кто, место, орудие)')
+
 
     @classmethod
     @sync_to_async
-    def create(cls, room: 'CluedoRoom'=None, secret: str = '', distances: str = '') -> 'CluedoGame':
+    def create(cls, room: 'CluedoRoom'=None, winner: 'User'=None, 
+            secret: str = '', distances: str = '', open_cards:str='', started:bool=False, alive:int=0, won:bool=True,
+            asking:bool=False, accusing:bool=False, asked:bool=False, choose_place:bool=False, turn_number:int=0) -> 'CluedoGame':
         game: 'CluedoGame' = cls()
         game.room = room
+        game.winner = winner
         game.distances = distances
+        game.secret = secret
+        game.open_cards = open_cards
+        game.started = started
+        game.alive = alive
+        game.won = won
+        game.asking = asking
+        game.accusing = accusing
+        game.asked = asked
+        game.choose_place = choose_place
+        game.turn_number = turn_number
+
         game.save()
         return game
+    
+    @sync_to_async
+    def async_save(self) -> None:
+        self.save()
+
+class CluedoPlayer(models.Model):
+    id = models.AutoField(primary_key=True)
+
+    alive = models.BooleanField(default=True, verbose_name='игрок жив')
+    number = models.BooleanField(default=-1, verbose_name='номер игрока в порядке хода')
+    known_cards = models.TextField(max_length=1023, null=True, blank=True, verbose_name='Известные игроку карты')
+    cards = models.TextField(max_length=1023, null=True, blank=True, verbose_name='карты игрока')
+
+    user = models.ForeignKey('User', on_delete=models.CASCADE, blank=True, null=True, verbose_name='Пользователь, который является игроком')
+    game = models.ForeignKey(CluedoGame, on_delete=models.CASCADE, blank=True, null=True, verbose_name='ссылка на игру')
+
+    place = models.ForeignKey('CluedoPlace', on_delete=models.CASCADE, blank=True, null=True, verbose_name='место, в котором находится игрок')
+    alias = models.ForeignKey('CluedoPerson', on_delete=models.CASCADE, blank=True, null=True, verbose_name='игровой псевдоним игрока')
+
+    @classmethod
+    @sync_to_async
+    def create(cls, user: 'User'=None, game: CluedoGame=None, place: 'CluedoPlace'=None, alias: 'CluedoPerson'=None, alive:bool = True, 
+                    cards: str='', known_cards: str=''):
+        player: 'CluedoPlayer' = cls()
+        player.user = user
+        player.game = game
+        player.place = place
+        player.alias = alias
+        player.alive = alive
+        player.cards = cards
+        player.known_cards = known_cards
+
+        player.save()
+        return player
     
     @sync_to_async
     def async_save(self) -> None:

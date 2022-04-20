@@ -23,6 +23,62 @@ class Migration(migrations.Migration):
             ],
         ),
 
+        migrations.AddField(
+            model_name='cluedogame',
+            name='accusing',
+            field=models.BooleanField(default=False, verbose_name='Обвинение'),
+        ),
+        migrations.AddField(
+            model_name='cluedogame',
+            name='alive',
+            field=models.IntegerField(default=-1, verbose_name='осталось игроков'),
+        ),
+        migrations.AddField(
+            model_name='cluedogame',
+            name='asked',
+            field=models.BooleanField(default=False, verbose_name='Вопрос задан'),
+        ),
+        migrations.AddField(
+            model_name='cluedogame',
+            name='asking',
+            field=models.BooleanField(default=False, verbose_name='Вопрос задается'),
+        ),
+        migrations.AddField(
+            model_name='cluedogame',
+            name='choose_place',
+            field=models.BooleanField(default=False, verbose_name='выбор места'),
+        ),
+        migrations.AddField(
+            model_name='cluedogame',
+            name='open_cards',
+            field=models.TextField(blank=True, max_length=1023, null=True, verbose_name='Открытые в процессе игры карты в формате {"<type>": id}, где type = person, place, weapon'),
+        ),
+        migrations.AddField(
+            model_name='cluedogame',
+            name='started',
+            field=models.BooleanField(default=False, verbose_name='игра началась'),
+        ),
+        migrations.AddField(
+            model_name='cluedogame',
+            name='turn_number',
+            field=models.IntegerField(default=-1, verbose_name=''),
+        ),
+        migrations.AddField(
+            model_name='cluedogame',
+            name='won',
+            field=models.BooleanField(default=False, verbose_name=' Победа в игре'),
+        ),
+        migrations.AlterField(
+            model_name='cluedogame',
+            name='distances',
+            field=models.TextField(blank=True, max_length=1023, null=True, verbose_name='Расстояния между помещениями'),
+        ),
+        migrations.AlterField(
+            model_name='cluedogame',
+            name='secret',
+            field=models.TextField(blank=True, max_length=1023, null=True, verbose_name='Загадка игры (кто, место, орудие) в формате {"person": id, "place": id, "weapon": id}'),
+        ),
+
         migrations.CreateModel(
             name='CluedoRoom',
             fields=[
@@ -95,4 +151,18 @@ class Migration(migrations.Migration):
             ],
         ),
 
+        migrations.CreateModel(
+            name='CluedoPlayer',
+            fields=[
+                ('id', models.AutoField(primary_key=True, serialize=False)),
+                ('alive', models.BooleanField(default=True, verbose_name='игрок жив')),
+                ('number', models.BooleanField(default=-1, verbose_name='номер игрока в порядке хода')),
+                ('known_cards', models.TextField(blank=True, max_length=1023, null=True, verbose_name='Известные игроку карты')),
+                ('cards', models.TextField(blank=True, max_length=1023, null=True, verbose_name='карты игрока')),
+                ('alias', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='data.cluedoperson', verbose_name='игровой псевдоним игрока')),
+                ('game', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='data.cluedogame', verbose_name='ссылка на игру')),
+                ('place', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='data.cluedoplace', verbose_name='место, в котором находится игрок')),
+                ('user', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='data.user', verbose_name='Пользователь, который является игроком')),
+            ],
+        ),
     ]
