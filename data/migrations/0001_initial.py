@@ -25,28 +25,8 @@ class Migration(migrations.Migration):
 
         migrations.AddField(
             model_name='cluedogame',
-            name='accusing',
-            field=models.BooleanField(default=False, verbose_name='Обвинение'),
-        ),
-        migrations.AddField(
-            model_name='cluedogame',
             name='alive',
             field=models.IntegerField(default=-1, verbose_name='осталось игроков'),
-        ),
-        migrations.AddField(
-            model_name='cluedogame',
-            name='asked',
-            field=models.BooleanField(default=False, verbose_name='Вопрос задан'),
-        ),
-        migrations.AddField(
-            model_name='cluedogame',
-            name='asking',
-            field=models.BooleanField(default=False, verbose_name='Вопрос задается'),
-        ),
-        migrations.AddField(
-            model_name='cluedogame',
-            name='choose_place',
-            field=models.BooleanField(default=False, verbose_name='выбор места'),
         ),
         migrations.AddField(
             model_name='cluedogame',
@@ -157,6 +137,7 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(primary_key=True, serialize=False)),
                 ('alive', models.BooleanField(default=True, verbose_name='игрок жив')),
                 ('number', models.IntegerField(default=-1, verbose_name='номер игрока в порядке хода')),
+                ('dice_throw_result', models.IntegerField(default=-1, verbose_name='результат броска кубика')),
                 ('known_cards', models.TextField(blank=True, max_length=1023, null=True, verbose_name='Известные игроку карты')),
                 ('cards', models.TextField(blank=True, max_length=1023, null=True, verbose_name='карты игрока')),
                 ('alias', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='data.cluedoperson', verbose_name='игровой псевдоним игрока')),

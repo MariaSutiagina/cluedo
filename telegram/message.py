@@ -7,7 +7,7 @@ from typing import List, Optional, Dict, Union
 from aiogram import Bot, types
 from django.db.models import Q
 import settings
-from .keyboard import RoomKeyboard, RoomsKeyboard, SimpleKeyboard #, QuizKeyboard, DashboardKeyboard
+from .keyboard import PlayerTurnKeyboard, RoomKeyboard, RoomsKeyboard, SimpleKeyboard #, QuizKeyboard, DashboardKeyboard
 from botstate import states
 from utils import MediaCache
 from data import models
@@ -156,9 +156,12 @@ class GameWaitingContext(MessageContext):
         #     await self.send_msg(u.chat_id, u.last_message_id, text, keyboard, mode)
 
 class GameContext(MessageContext):
-    def __init__(self, bot: Bot, linked_message: models.LinkedMessages) -> None:
+    def __init__(self, bot: Bot, linked_message: models.LinkedMessages, **kwargs) -> None:
         super().__init__(bot, linked_message)
         self.game: Game = None
+        self.accuse_location = kwargs.get('location', -1)
+        self.accuse_person = kwargs.get('accuse_person', -1)
+        self.accuse_weapon = kwargs.get('accuse_weapon', -1)
 
     def _get_users_in_room(self, users):
         if users:
@@ -166,33 +169,88 @@ class GameContext(MessageContext):
         else:
             return random.choice(['пусто', 'пустота', 'никогошеньки', 'нет игроков'])
 
-    async def send_message(self, user: models.User, message: models.Message, message_id: Optional[int]) -> None:
-        users = list(models.User.objects.filter(Q(room=user.room) & ~Q(name=user.name)))
-        text: str = f"Комната: {user.room.name}" + '\n' + \
-                    f"В комнате: {self._get_users_in_room([*users, user])}" + '\n' + \
-                    f"{self.game.get_general_game_info()}" + '\n' + \
-                    f"{self.game.get_open_cards_info()}" + '\n'
-        
-        player_turn: Player = self.game.get_player_whos_turn()
-        turn_message = f'ХОД ИГРОКА {player_turn.alias.name} ({player_turn.user.name})'+'\n'+f'ЖДЕМ ХОДА {player_turn.alias.name} ({player_turn.user.name})'
+    def _get_room_message(self, user: models.User, users: List[models.User]) -> str:
+        if user.substate == 0:
+            return f"Комната: {user.room.name}" + '\n' + \
+                        f"В комнате: {self._get_users_in_room([*users, user])}" + '\n' + \
+                        f"{self.game.get_general_game_info()}" + '\n' + \
+                        f"{self.game.get_open_cards_info()}" + '\n'
+        elif user.substate == 1:
+            return ''
 
-        keyboard, mode = SimpleKeyboard.get_markup(message)
-        for u in users:
-            player: Player = self.game.get_player(u)
-            msg_text: str = text + \
+    def _get_turn_message(self, player_turn: Player) -> str:
+        return f'ХОД ИГРОКА {player_turn.alias.name} ({player_turn.user.name})'+'\n'+f'ЖДЕМ ХОДА {player_turn.alias.name} ({player_turn.user.name})' + '\n'
+
+    def _get_current_place(self, player: Player) -> str:
+        return f'ВЫ в {player.place.name}' + '\n'
+
+    def _get_accessible_places(self, player: Player):
+        return '\n'.join(map(lambda x: x.name, player.accessible_places)) + '\n'
+
+    def _get_dice_message(self, player: Player, player_turn: Player) -> str:
+        if player_turn.user.state == 'THROW_DICE':
+            if player == player_turn:
+                return f'ВЫ бросили кости.\nВам выпало {player.dice_throw_result}. Вы можете выбрать одну из локаций: '+'\n'+f'{self._get_accessible_places(player)}' + '\n'
+            else: 
+                return f'{player_turn.alias} бросил(а,о,и) кости.'+'\n' + f'Выпало {player.dice_throw_result}. {player_turn.alias}  выбирает новую комнату' + '\n'
+        else:
+            return ''
+        
+    def _get_new_location_text(self, player: Player, player_turn: Player):
+        if player_turn.user.state == 'SELECT_PLACE':
+            if player == player_turn:
+                return f'{player.alias.name}, выберите новую локацию:' + '\n'
+        return ''
+
+    def _get_accuse_location_text(self):
+        pass 
+
+    def _compose_player_message(self, player: Player, room_text: str, turn_text: str, place_text:str, dice_text: str, new_location_text: str) -> str:
+        if player.user.substate == 0:
+            return room_text + \
                 player.get_cards_info() + '\n\n' + \
                 player.get_known_cards_info() + '\n\n' + \
-                f"ТЫ: {player.alias.name} ({player.user.name})" + '\n' + \
-                turn_message
-            await self.send_msg(u.chat_id, u.last_message_id, msg_text, keyboard, mode)
+                f"ВЫ: {player.alias.name} ({player.user.name})" + '\n' + \
+                turn_text + \
+                place_text + \
+                dice_text + \
+                new_location_text
+        elif player.user.substate == 1:
+            return room_text + \
+                f"ВЫ: {player.alias.name} ({player.user.name})" + '\n' + \
+                place_text + \
+                turn_text + \
+                dice_text + \
+                new_location_text
+        else:
+            return ''
+
+    async def send_message(self, user: models.User, message: models.Message, message_id: Optional[int]) -> None:
+        player_turn: Player = self.game.get_player_whos_turn()
+        users = list(models.User.objects.filter(Q(room=user.room) & ~Q(name=user.name)))
+
+        room_text: str = self._get_room_message(user, users)
+        turn_text: str = self._get_turn_message(player_turn)
+        for u in users:
+            player: Player = self.game.get_player(u)
+            dice_text: str = self._get_dice_message(player, player_turn)
+            place_text: str = self._get_current_place(player)
+            new_location_text: str = self._get_new_location_text(player, player_turn)
+            player_msg : str = self._compose_player_message(player, room_text, turn_text, place_text, dice_text, new_location_text)
+            keyboard, mode = PlayerTurnKeyboard.get_markup(message, player, player_turn, self.game)
+
+            await self.send_msg(u.chat_id, u.last_message_id, player_msg, keyboard, mode)
 
         player: Player = self.game.get_player(user)
-        msg_text: str = text + \
-            player.get_cards_info() + '\n\n' + \
-            player.get_known_cards_info() + '\n\n' + \
-            f"ТЫ: {player.alias.name} ({player.user.name})" + '\n' + \
-            turn_message
-        await self.send_msg(user.chat_id, message_id, msg_text, keyboard, mode)
+        dice_text: str = self._get_dice_message(player, player_turn)
+        place_text: str = self._get_current_place(player)
+        new_location_text: str = self._get_new_location_text(player, player_turn)
+        player_msg : str = self._compose_player_message(player, room_text, turn_text, place_text, dice_text, new_location_text)
+        keyboard, mode = PlayerTurnKeyboard.get_markup(message, player, player_turn, self.game)
+
+        await self.send_msg(user.chat_id, message_id, player_msg, keyboard, mode)
+
+        await self.persist_game(user)
 
     async def persist_game(self, user: models.User):
         cluedo_game = await models.CluedoGame.create(
@@ -204,11 +262,10 @@ class GameContext(MessageContext):
             True,
             self.game.alive,
             self.game.won,
-            self.game.asking,
-            self.game.accusing,
-            self.game.asked,
-            self.game.choose_place,
-            self.game.turn_number
+            self.game.turn_number,
+            self.game.accused_place,
+            self.game.accused_person,
+            self.game.accused_weapon
             )
 
         for p in self.game.players:
@@ -216,6 +273,7 @@ class GameContext(MessageContext):
                 user,
                 cluedo_game, 
                 p.number,
+                p.dice_throw_result,
                 p.place,
                 p.alias,
                 p.alive,
@@ -231,10 +289,11 @@ class GameContext(MessageContext):
         if cluedo_game is None:
             self.game = Game(user)
             self.game.create()
-            await self.persist_game(user)
+            # await self.persist_game(user)
         else:
             self.game = Game(user)
             self.game.from_model(cluedo_game)
+        self.game.update_state(accused_location=self.accuse_location, accused_person=self.accuse_person, accused_weapon=self.accuse_weapon)
         
         
 

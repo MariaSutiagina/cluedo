@@ -6,6 +6,9 @@ class Distances:
     def __init__(self, dist: List[List[int]]):
         self.dist: List[List[int]] = dist
 
+    def get_dist(self, index1: int, index2: int) -> int:
+        return self.dist[index1][index2]
+
     def __str__(self):
         return '\n'.join(map(lambda x: ','.join(map(str,x)), self.dist))
 

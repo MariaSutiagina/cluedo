@@ -16,4 +16,20 @@ class Migration(migrations.Migration):
             name='winner',
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='data.user', verbose_name='Победитель'),
         ),
+        migrations.AddField(
+            model_name='cluedogame',
+            name='accuse_person',
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='data.cluedoperson', verbose_name='Подозрение на преступника'),
+        ),
+        migrations.AddField(
+            model_name='cluedogame',
+            name='accuse_place',
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='data.cluedoplace', verbose_name='Подозрение на место преступления'),
+        ),
+        migrations.AddField(
+            model_name='cluedogame',
+            name='accuse_weapon',
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='data.cluedoweapon', verbose_name='Подозрение на орудие'),
+        ),
+
     ]

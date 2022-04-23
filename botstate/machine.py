@@ -223,8 +223,188 @@ class GameState(BotState):
             state = RoomState(self.bot)
             await state.set_context()
             return state
+        elif message_payload == 'throw_dice':
+            user.state = 'THROW_DICE'
+            user.substate = user.substate
+            state = ThrowDiceState(self.bot)
+            await state.set_context()
+            return state
+        elif message_payload == 'hide_state':
+            user.substate = 1
+            return self
+        elif message_payload == 'show_state':
+            user.substate = 0
+            return self
         else:
             return self
+
+class ThrowDiceState(BotState):
+    def __init__(self, bot: Bot) -> None:
+        self.bot = bot
+
+        self.linked_message_name = 'THROW_DICE'
+        self.context: Optional[message.MessageContext] = None
+
+    async def set_context(self) -> None:
+        linked_message: models.LinkedMessages = await self.get_linked_message()
+        self.context = message.GameContext(self.bot, linked_message)
+        await self.context.init_context()    
+
+    """
+    возвращает новое состояние объекта в зависимости от текущего 
+    """
+    async def update_state(self, user: models.User, message_payload, message_id):
+        if message_payload == 'to_room':
+            user.state = 'ROOM'
+            user.substate = 0
+            state = RoomState(self.bot)
+            await state.set_context()
+            return state
+        elif message_payload == 'select_place':
+            user.state = 'SELECT_PLACE'
+            user.substate = user.substate
+            state = SelectPlaceState(self.bot)
+            await state.set_context()
+            return state
+        elif message_payload == 'hide_state':
+            user.substate = 1
+            return self
+        elif message_payload == 'show_state':
+            user.substate = 0
+            return self
+        else:
+            return self
+
+class  AccuseWeaponState(BotState):
+    def __init__(self, bot: Bot) -> None:
+        self.bot = bot
+
+        self.linked_message_name = 'ACCUSE_WEAPON'
+        self.context: Optional[message.MessageContext] = None
+
+    async def set_context(self) -> None:
+        linked_message: models.LinkedMessages = await self.get_linked_message()
+        self.context = message.GameContext(self.bot, linked_message)
+        await self.context.init_context()    
+
+    """
+    возвращает новое состояние объекта в зависимости от текущего 
+    """
+    async def update_state(self, user: models.User, message_payload, message_id):
+        if message_payload == 'to_room':
+            user.state = 'ROOM'
+            user.substate = 0
+            state = RoomState(self.bot)
+            await state.set_context()
+            return state
+        elif message_payload == 'hide_state':
+            user.substate = 1
+            return self
+        elif message_payload == 'show_state':
+            user.substate = 0
+            return self
+        else:
+            try:
+                person = json.loads(message_payload)
+                if person.get('accused_weapon', -1) >= 0:
+                    user.state = 'ACCUSE_WEAPON'
+                    user.substate = 0
+                    state = ConfirmAccuseState(self.bot, person['accused_weapon'])
+
+                    await state.set_context()
+                    return state
+                else:
+                    raise ValueError
+            except ValueError as e:
+                return self
+
+
+class  AccusePersonState(BotState):
+    def __init__(self, bot: Bot, new_location: int) -> None:
+        self.bot = bot
+
+        self.linked_message_name = 'ACCUSE_PERSON'
+        self.context: Optional[message.MessageContext] = None
+        self.location = new_location
+
+    async def set_context(self) -> None:
+        linked_message: models.LinkedMessages = await self.get_linked_message()
+        self.context = message.GameContext(self.bot, linked_message, location=self.location)
+        await self.context.init_context()    
+
+    """
+    возвращает новое состояние объекта в зависимости от текущего 
+    """
+    async def update_state(self, user: models.User, message_payload, message_id):
+        if message_payload == 'to_room':
+            user.state = 'ROOM'
+            user.substate = 0
+            state = RoomState(self.bot)
+            await state.set_context()
+            return state
+        elif message_payload == 'hide_state':
+            user.substate = 1
+            return self
+        elif message_payload == 'show_state':
+            user.substate = 0
+            return self
+        else:
+            try:
+                person = json.loads(message_payload)
+                if person.get('accused_person', -1) >= 0:
+                    user.state = 'ACCUSE_WEAPON'
+                    user.substate = 0
+                    state = AccuseWeaponState(self.bot, person['accused_person'])
+
+                    await state.set_context()
+                    return state
+                else:
+                    raise ValueError
+            except ValueError as e:
+                return self
+
+class  SelectPlaceState(BotState):
+    def __init__(self, bot: Bot) -> None:
+        self.bot = bot
+
+        self.linked_message_name = 'SELECT_PLACE'
+        self.context: Optional[message.MessageContext] = None
+
+    async def set_context(self) -> None:
+        linked_message: models.LinkedMessages = await self.get_linked_message()
+        self.context = message.GameContext(self.bot, linked_message)
+        await self.context.init_context()    
+
+    """
+    возвращает новое состояние объекта в зависимости от текущего 
+    """
+    async def update_state(self, user: models.User, message_payload, message_id):
+        if message_payload == 'to_room':
+            user.state = 'ROOM'
+            user.substate = 0
+            state = RoomState(self.bot)
+            await state.set_context()
+            return state
+        elif message_payload == 'hide_state':
+            user.substate = 1
+            return self
+        elif message_payload == 'show_state':
+            user.substate = 0
+            return self
+        else:
+            try:
+                place = json.loads(message_payload)
+                if place.get('new_location', -1) >= 0:
+                    user.state = 'ACCUSE_PERSON'
+                    user.substate = 0
+                    state = AccusePersonState(self.bot, place['new_location'])
+
+                    await state.set_context()
+                    return state
+                else:
+                    raise ValueError
+            except ValueError as e:
+                return self
 
 
 class RulesState(BotState):
@@ -355,6 +535,21 @@ class Machine(object):
             await state.set_context()
         elif user.state == State.GAME.name:
             state = GameState(self.bot)
+            await state.set_context()
+        elif user.state == State.THROW_DICE.name:
+            state = ThrowDiceState(self.bot)
+            await state.set_context()
+        elif user.state == State.SELECT_PLACE.name:
+            state = SelectPlaceState(self.bot)
+            await state.set_context()
+        elif user.state == State.ACCUSE_PERSON.name:
+            state = AccusePersonState(self.bot)
+            await state.set_context()
+        elif user.state == State.ACCUSE_WEAPON.name:
+            state = AccuseWeaponState(self.bot)
+            await state.set_context()
+        elif user.state == State.CONFIRM_ACCUSE.name:
+            state = ConfirmAccuseState(self.bot)
             await state.set_context()
         else:
             state = GreetingState(self.bot)

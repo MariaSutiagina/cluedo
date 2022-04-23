@@ -1,6 +1,7 @@
 import json
-from typing import List, Union, Tuple, Optional
+from typing import Dict, List, Union, Tuple, Optional
 from aiogram import Bot, Dispatcher, executor, types
+from cluedo.game import Game, Player
 
 from data import models
 
@@ -8,17 +9,14 @@ from data import models
 class SimpleKeyboard(object):
 
     @staticmethod
-    def get_markup(message: models.Message) -> types.InlineKeyboardMarkup:
+    def get_markup_dict(message: models.Message) -> Dict:
         def _parse_key(x):
             kk = x.split(':')
             return {'row':int(kk[0][1:]), 'col': int(kk[1][1:]), 'key':x}
 
-        keyboard_markup: types.InlineKeyboardMarkup = types.InlineKeyboardMarkup(
-            row_width=3)
-
         markup =  json.loads(message.actions)
+        markup_rows = {}
         if markup is not None:
-            markup_rows = {}
             markup_keys = map(lambda x: _parse_key(x), markup.keys())
             for k in sorted(list(markup_keys), key = lambda x: (x['row'], x['col'])):
                 rn = k['row']
@@ -26,6 +24,16 @@ class SimpleKeyboard(object):
                 if r is None:
                     markup_rows[rn] = []
                 markup_rows[rn].append(types.InlineKeyboardButton(markup[k['key']]['name'], callback_data=markup[k['key']]['action']))
+
+        return markup_rows
+
+    @staticmethod
+    def get_markup(message: models.Message) -> types.InlineKeyboardMarkup:
+
+        keyboard_markup: types.InlineKeyboardMarkup = types.InlineKeyboardMarkup(
+            row_width=3)
+
+        markup_rows = SimpleKeyboard.get_markup_dict(message)
 
         for r in range(len(markup_rows)):
             keyboard_markup.row(*markup_rows[r])
@@ -56,7 +64,7 @@ class RoomKeyboard(object):
     def get_markup(message: models.Message, room) -> types.InlineKeyboardMarkup:
         keyboard_markup: types.InlineKeyboardMarkup = types.InlineKeyboardMarkup(
             row_width=3)
-
+        
         markup_rows = {0:[], 1:[]}
         markup_rows[0].append(types.InlineKeyboardButton('СТАРТ', callback_data=f'{{"room": {room.id}}}'))
         markup_rows[1].append(types.InlineKeyboardButton('выйти из комнаты', callback_data='to_rooms'))
@@ -64,6 +72,34 @@ class RoomKeyboard(object):
         for r in range(len(markup_rows)):
             keyboard_markup.row(*markup_rows[r])
 
+        return keyboard_markup, types.ParseMode.HTML
+
+class PlayerTurnKeyboard(object):
+
+    @staticmethod
+    def get_markup(message: models.Message, player: Player, player_turn: Player, game: Game) -> types.InlineKeyboardMarkup:
+        keyboard_markup: types.InlineKeyboardMarkup = types.InlineKeyboardMarkup(
+            row_width=3)
+         
+        markup_rows = SimpleKeyboard.get_markup_dict(message)
+        markup_row = []
+        if player == player_turn:
+            if player.user.state == 'GAME':
+                markup_row.append(types.InlineKeyboardButton('Бросить кости', callback_data='throw_dice'))
+                keyboard_markup.row(*markup_row)
+            elif player.user.state == 'THROW_DICE':
+                markup_row.append(types.InlineKeyboardButton('К выбору локации', callback_data='select_place'))
+                keyboard_markup.row(*markup_row)
+            elif player.user.state == 'SELECT_PLACE':
+                for place in player.accessible_places:
+                    markup_row = []
+                    markup_row.append(types.InlineKeyboardButton(place.name, callback_data=f'{{"new_location": {place.id}}}'))
+                    keyboard_markup.row(*markup_row)
+            
+
+        for r in range(len(markup_rows)):
+            keyboard_markup.row(*markup_rows[r])
+        
         return keyboard_markup, types.ParseMode.HTML
 
 

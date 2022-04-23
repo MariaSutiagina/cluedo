@@ -18,19 +18,20 @@ class CluedoGame(models.Model):
     alive = models.IntegerField(default=-1, verbose_name='осталось игроков')
     started = models.BooleanField(default=False, verbose_name='игра началась')
     won = models.BooleanField(default=False, verbose_name=' Победа в игре')
-    asking = models.BooleanField(default=False, verbose_name='Вопрос задается')
-    asked = models.BooleanField(default=False, verbose_name='Вопрос задан')
-    accusing = models.BooleanField(default=False, verbose_name='Обвинение')
-    choose_place = models.BooleanField(default=False, verbose_name='выбор места')
     turn_number = models.IntegerField(default=-1, verbose_name='')
     winner = models.ForeignKey('User', on_delete=models.CASCADE, blank=True, null=True, verbose_name='Победитель')
+
+    accuse_place = models.ForeignKey('CluedoPlace', on_delete=models.CASCADE, blank=True, null=True, verbose_name='Подозрение на место преступления')
+    accuse_person = models.ForeignKey('CluedoPerson', on_delete=models.CASCADE, blank=True, null=True, verbose_name='Подозрение на преступника')
+    accuse_weapon = models.ForeignKey('CluedoWeapon', on_delete=models.CASCADE, blank=True, null=True, verbose_name='Подозрение на орудие')
 
 
     @classmethod
     @sync_to_async
     def create(cls, room: 'CluedoRoom'=None, winner: 'User'=None, 
             secret: str = '', distances: str = '', open_cards:str='', started:bool=False, alive:int=0, won:bool=True,
-            asking:bool=False, accusing:bool=False, asked:bool=False, choose_place:bool=False, turn_number:int=0) -> 'CluedoGame':
+            turn_number:int=0,
+            accused_place: 'CluedoPlace' = None, accused_person: 'CluedoPerson'=None, accused_weapon: 'CluedoWeapon'=None) -> 'CluedoGame':
         game: 'CluedoGame' = cls()
         game.room = room
         game.winner = winner
@@ -40,11 +41,10 @@ class CluedoGame(models.Model):
         game.started = started
         game.alive = alive
         game.won = won
-        game.asking = asking
-        game.accusing = accusing
-        game.asked = asked
-        game.choose_place = choose_place
         game.turn_number = turn_number
+        game.accuse_place = accused_place
+        game.accuse_person = accused_person
+        game.accuse_weapon = accused_weapon
 
         game.save()
         return game
@@ -58,6 +58,7 @@ class CluedoPlayer(models.Model):
 
     alive = models.BooleanField(default=True, verbose_name='игрок жив')
     number = models.IntegerField(default=-1, verbose_name='номер игрока в порядке хода')
+    dice_throw_result = models.IntegerField(default=-1, verbose_name='результат броска кубика')
     known_cards = models.TextField(max_length=1023, null=True, blank=True, verbose_name='Известные игроку карты')
     cards = models.TextField(max_length=1023, null=True, blank=True, verbose_name='карты игрока')
 
@@ -69,12 +70,13 @@ class CluedoPlayer(models.Model):
 
     @classmethod
     @sync_to_async
-    def create(cls, user: 'User'=None, game: CluedoGame=None, number:int=-1, place: 'CluedoPlace'=None, alias: 'CluedoPerson'=None, alive:bool = True, 
+    def create(cls, user: 'User'=None, game: CluedoGame=-1, number:int=-1, dice_throw_result:int=None, place: 'CluedoPlace'=None, alias: 'CluedoPerson'=None, alive:bool = True, 
                     cards: str='', known_cards: str=''):
         player: 'CluedoPlayer' = cls()
         player.user = user
         player.game = game
         player.number = number
+        player.dice_throw_result = dice_throw_result
         player.place = place
         player.alias = alias
         player.alive = alive
@@ -122,7 +124,7 @@ class CluedoPerson(models.Model):
 
     @staticmethod
     @functools.lru_cache(maxsize=None)
-    def get_room_people(room: CluedoRoom) -> 'People':
+    def get_room_people(room: CluedoRoom) -> 'CluedoPeople':
         return CluedoPerson.objects.filter(room=room).order_by('id')
 
     def __str__(self):
@@ -137,7 +139,7 @@ class CluedoPlace(models.Model):
 
     @staticmethod
     @functools.lru_cache(maxsize=None)
-    def get_room_places(room: CluedoRoom) -> 'Places':
+    def get_room_places(room: CluedoRoom) -> 'CluedoPlaces':
         return CluedoPlace.objects.filter(room=room).order_by('id')
 
     def __str__(self):
@@ -151,7 +153,7 @@ class CluedoWeapon(models.Model):
 
     @staticmethod
     @functools.lru_cache(maxsize=None)
-    def get_room_weapons(room: CluedoRoom) -> 'Weapons':
+    def get_room_weapons(room: CluedoRoom) -> 'CluedoWeapons':
         return CluedoWeapon.objects.filter(room=room).order_by('id')
 
     def __str__(self):
