@@ -233,8 +233,8 @@ class Game:
         elif self.user.state == 'ACCUSE_WEAPON':
             player: Player = self.get_player_whos_turn()
             if kwargs.get('accused_person', -1) >= 0:
-                self.accused_place = models.CluedoPlace.objects.filter(id=kwargs['accused_person']).first()
+                self.accused_person = models.CluedoPerson.objects.filter(id=kwargs['accused_person']).first()
         elif self.user.state == 'CONFIRM_ACCUSE':
             player: Player = self.get_player_whos_turn()
             if kwargs.get('accused_weapon', -1) >= 0:
-                self.accused_weapon = models.CluedoPlace.objects.filter(id=kwargs['accused_weapon']).first()
+                self.accused_weapon = models.CluedoWeapon.objects.filter(id=kwargs['accused_weapon']).first()

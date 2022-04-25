@@ -182,7 +182,7 @@ class GameContext(MessageContext):
         return f'ХОД ИГРОКА {player_turn.alias.name} ({player_turn.user.name})'+'\n'+f'ЖДЕМ ХОДА {player_turn.alias.name} ({player_turn.user.name})' + '\n'
 
     def _get_current_place(self, player: Player) -> str:
-        return f'ВЫ в {player.place.name}' + '\n'
+        return f'ВЫ {player.place.name}' + '\n'
 
     def _get_accessible_places(self, player: Player):
         return '\n'.join(map(lambda x: x.name, player.accessible_places)) + '\n'
@@ -199,13 +199,44 @@ class GameContext(MessageContext):
     def _get_new_location_text(self, player: Player, player_turn: Player):
         if player_turn.user.state == 'SELECT_PLACE':
             if player == player_turn:
-                return f'{player.alias.name}, выберите новую локацию:' + '\n'
+                return f'{player.alias.name}, выберите локацию с местом преступления:' + '\n'
         return ''
 
-    def _get_accuse_location_text(self):
-        pass 
+    def _get_accused_person_text(self, player: Player, player_turn: Player):
+        if player_turn.user.state == 'ACCUSE_PERSON':
+            if player == player_turn:
+                return f'{player.alias.name}, ваша текущая локация - предполагаемое место преступления'+'\nтеперь вам надо выбрать подозреваемого:\n'
+        return ''
 
-    def _compose_player_message(self, player: Player, room_text: str, turn_text: str, place_text:str, dice_text: str, new_location_text: str) -> str:
+    def _get_accused_weapon_text(self, player: Player, player_turn: Player):
+        if player_turn.user.state == 'ACCUSE_WEAPON':
+            if player == player_turn:
+                return f'{player.alias.name}, итак, место преступления - {self.game.accused_place}, '+ \
+                       '\n' + f'подозреваемый - {self.game.accused_person}'+ \
+                       '\n' + 'теперь надо выбрать орудие преступления\n'
+        return ''
+
+    def _get_accuse_finished_text(self, player: Player, player_turn: Player):
+        if player_turn.user.state == 'CONFIRM_ACCUSE':
+            if player == player_turn:
+                return f'Вы, {player_turn.alias.name}, сформировали свои подозрения - ' + '\n' + \
+                    f'Место преступления: {self.game.accused_place}, ' + '\n' + \
+                    f'Подозреваемый: {self.game.accused_person}, ' + '\n' + \
+                    f'Орудие: {self.game.accused_weapon}' + '\n' + \
+                    'теперь надо либо высказать свои подозрения, либо выдвинуть обвинение\n'
+        return ''
+
+    def _compose_player_message(self, 
+               player: Player, 
+               room_text: str, 
+               turn_text: str, 
+               place_text:str, 
+               dice_text: str, 
+               new_location_text: str,
+               new_person_text: str,
+               new_weapon_text: str,
+               accuse_finished_text: str
+               ) -> str:
         if player.user.substate == 0:
             return room_text + \
                 player.get_cards_info() + '\n\n' + \
@@ -214,14 +245,20 @@ class GameContext(MessageContext):
                 turn_text + \
                 place_text + \
                 dice_text + \
-                new_location_text
+                new_location_text + \
+                new_person_text + \
+                new_weapon_text + \
+                accuse_finished_text
         elif player.user.substate == 1:
             return room_text + \
                 f"ВЫ: {player.alias.name} ({player.user.name})" + '\n' + \
                 place_text + \
                 turn_text + \
                 dice_text + \
-                new_location_text
+                new_location_text + \
+                new_person_text + \
+                new_weapon_text + \
+                accuse_finished_text
         else:
             return ''
 
@@ -235,8 +272,20 @@ class GameContext(MessageContext):
             player: Player = self.game.get_player(u)
             dice_text: str = self._get_dice_message(player, player_turn)
             place_text: str = self._get_current_place(player)
-            new_location_text: str = self._get_new_location_text(player, player_turn)
-            player_msg : str = self._compose_player_message(player, room_text, turn_text, place_text, dice_text, new_location_text)
+            accuse_location_text: str = self._get_new_location_text(player, player_turn)
+            accuse_person_text: str = self._get_accused_person_text(player, player_turn)
+            accuse_weapon_text: str = self._get_accused_weapon_text(player, player_turn)
+            accuse_finished_text: str = self._get_accuse_finished_text(player, player_turn)
+            player_msg : str = self._compose_player_message(
+                player, 
+                room_text, 
+                turn_text, 
+                place_text, 
+                dice_text, 
+                accuse_location_text,
+                accuse_person_text,
+                accuse_weapon_text,
+                accuse_finished_text)
             keyboard, mode = PlayerTurnKeyboard.get_markup(message, player, player_turn, self.game)
 
             await self.send_msg(u.chat_id, u.last_message_id, player_msg, keyboard, mode)
@@ -244,8 +293,20 @@ class GameContext(MessageContext):
         player: Player = self.game.get_player(user)
         dice_text: str = self._get_dice_message(player, player_turn)
         place_text: str = self._get_current_place(player)
-        new_location_text: str = self._get_new_location_text(player, player_turn)
-        player_msg : str = self._compose_player_message(player, room_text, turn_text, place_text, dice_text, new_location_text)
+        accuse_location_text: str = self._get_new_location_text(player, player_turn)
+        accuse_person_text: str = self._get_accused_person_text(player, player_turn)
+        accuse_weapon_text: str = self._get_accused_weapon_text(player, player_turn)
+        accuse_finished_text: str = self._get_accuse_finished_text(player, player_turn)
+        player_msg : str = self._compose_player_message(
+            player, 
+            room_text, 
+            turn_text, 
+            place_text, 
+            dice_text, 
+            accuse_location_text,
+            accuse_person_text,
+            accuse_weapon_text,
+            accuse_finished_text)
         keyboard, mode = PlayerTurnKeyboard.get_markup(message, player, player_turn, self.game)
 
         await self.send_msg(user.chat_id, message_id, player_msg, keyboard, mode)

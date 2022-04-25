@@ -275,16 +275,17 @@ class ThrowDiceState(BotState):
         else:
             return self
 
-class  AccuseWeaponState(BotState):
-    def __init__(self, bot: Bot) -> None:
+class  ConfirmAccuseState(BotState):
+    def __init__(self, bot: Bot, accused_weapon: int=-1) -> None:
         self.bot = bot
 
-        self.linked_message_name = 'ACCUSE_WEAPON'
+        self.linked_message_name = 'CONFIRM_ACCUSE'
         self.context: Optional[message.MessageContext] = None
+        self.accused_weapon = accused_weapon
 
     async def set_context(self) -> None:
         linked_message: models.LinkedMessages = await self.get_linked_message()
-        self.context = message.GameContext(self.bot, linked_message)
+        self.context = message.GameContext(self.bot, linked_message, accuse_weapon=self.accused_weapon)
         await self.context.init_context()    
 
     """
@@ -319,8 +320,52 @@ class  AccuseWeaponState(BotState):
                 return self
 
 
+class  AccuseWeaponState(BotState):
+    def __init__(self, bot: Bot, accused_person: int=-1) -> None:
+        self.bot = bot
+
+        self.linked_message_name = 'ACCUSE_WEAPON'
+        self.context: Optional[message.MessageContext] = None
+        self.accused_person = accused_person
+
+    async def set_context(self) -> None:
+        linked_message: models.LinkedMessages = await self.get_linked_message()
+        self.context = message.GameContext(self.bot, linked_message, accuse_person=self.accused_person)
+        await self.context.init_context()    
+
+    """
+    возвращает новое состояние объекта в зависимости от текущего 
+    """
+    async def update_state(self, user: models.User, message_payload, message_id):
+        if message_payload == 'to_room':
+            user.state = 'ROOM'
+            user.substate = 0
+            state = RoomState(self.bot)
+            await state.set_context()
+            return state
+        elif message_payload == 'hide_state':
+            user.substate = 1
+            return self
+        elif message_payload == 'show_state':
+            user.substate = 0
+            return self
+        else:
+            try:
+                person = json.loads(message_payload)
+                if person.get('accused_weapon', -1) >= 0:
+                    user.state = 'CONFIRM_ACCUSE'
+                    user.substate = 0
+                    state = ConfirmAccuseState(self.bot, person['accused_weapon'])
+
+                    await state.set_context()
+                    return state
+                else:
+                    raise ValueError
+            except ValueError as e:
+                return self
+
 class  AccusePersonState(BotState):
-    def __init__(self, bot: Bot, new_location: int) -> None:
+    def __init__(self, bot: Bot, new_location: int = -1) -> None:
         self.bot = bot
 
         self.linked_message_name = 'ACCUSE_PERSON'
