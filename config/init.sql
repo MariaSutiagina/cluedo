@@ -9,7 +9,9 @@ insert into data_linkedmessages(name, "group") values
 ('SELECT_PLACE','select_place'),
 ('ACCUSE_PERSON','accuse_person'),
 ('ACCUSE_WEAPON','accuse_weapon'),
-('CONFIRM_ACCUSE','confirm_accuse')
+('CONFIRM_ACCUSE','confirm_accuse'),
+('CHECK_SUSPICTION','check_suspiction'),
+('CHECK_ACCUSE','check_accuse')
 ;
 
 
@@ -155,7 +157,7 @@ insert into data_message(name, text_content, media_name, "group", "order", actio
  '010-accuse-person.jpg', 
  'accuse_person', 
  20, 
- '{"R0:C0":{"type":"button", "name":"Показать состояние"", "action":"show_state"},"R0:C1":{"type":"button", "name":"Прервать игру", "action":"to_room"}}'),
+ '{"R0:C0":{"type":"button", "name":"Показать состояние", "action":"show_state"},"R0:C1":{"type":"button", "name":"Прервать игру", "action":"to_room"}}'),
 ('010-accuse-weapon', 
  '',
  '010-accuse-weapon.jpg', 
@@ -178,6 +180,30 @@ insert into data_message(name, text_content, media_name, "group", "order", actio
  '',
  '020-confirm-accuse.jpg', 
  'confirm_accuse', 
+ 20, 
+ '{"R0:C0":{"type":"button", "name":"Показать состояние", "action":"show_state"},"R0:C1":{"type":"button", "name":"Прервать игру", "action":"to_room"}}'),
+('010-check-suspiction', 
+ '',
+ '010-check-suspiction.jpg', 
+ 'check_suspiction', 
+ 10, 
+ '{"R0:C0":{"type":"button", "name":"Скрыть состояние", "action":"hide_state"},"R0:C1":{"type":"button", "name":"Прервать игру", "action":"to_room"}}'),
+ ('020-check-suspiction', 
+ '',
+ '020-check-suspiction.jpg', 
+ 'check_suspiction', 
+ 20, 
+ '{"R0:C0":{"type":"button", "name":"Показать состояние", "action":"show_state"},"R0:C1":{"type":"button", "name":"Прервать игру", "action":"to_room"}}'),
+('010-check-accuse', 
+ '',
+ '010-check-accuse.jpg', 
+ 'check_accuse', 
+ 10, 
+ '{"R0:C0":{"type":"button", "name":"Скрыть состояние", "action":"hide_state"},"R0:C1":{"type":"button", "name":"Прервать игру", "action":"to_room"}}'),
+ ('020-check-accuse', 
+ '',
+ '020-check-accuse.jpg', 
+ 'check_accuse', 
  20, 
  '{"R0:C0":{"type":"button", "name":"Показать состояние", "action":"show_state"},"R0:C1":{"type":"button", "name":"Прервать игру", "action":"to_room"}}')
  ;

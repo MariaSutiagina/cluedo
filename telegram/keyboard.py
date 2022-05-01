@@ -75,16 +75,33 @@ class RoomKeyboard(object):
         return keyboard_markup, types.ParseMode.HTML
 
 class PlayerTurnKeyboard(object):
+    @staticmethod
+    def get_base_markup(player: Player) -> Dict:
+        markup_rows = {0: []}
+        if player.user.substate == 0:
+            markup_rows[0].append(types.InlineKeyboardButton('Скрыть состояние', callback_data='hide_state'))
+        elif player.user.substate == 1:
+            markup_rows[0].append(types.InlineKeyboardButton('Показать состояние', callback_data='show_state'))
+        else:
+            raise NotImplementedError
+        
+        markup_rows[0].append(types.InlineKeyboardButton('Прервать игру', callback_data='to_room'))
+
+        return markup_rows
 
     @staticmethod
     def get_markup(message: models.Message, player: Player, player_turn: Player, game: Game) -> types.InlineKeyboardMarkup:
         keyboard_markup: types.InlineKeyboardMarkup = types.InlineKeyboardMarkup(
             row_width=3)
          
-        markup_rows = SimpleKeyboard.get_markup_dict(message)
+        markup_rows = PlayerTurnKeyboard.get_base_markup(player)
         markup_row = []
-        if player == player_turn:
+        next_player = game.get_next_player()
+        if player.user.id == player_turn.user.id:
             if player.user.state == 'GAME':
+                markup_row.append(types.InlineKeyboardButton('Бросить кости', callback_data='throw_dice'))
+                keyboard_markup.row(*markup_row)
+            elif player.user.state == 'GAME_WAITING':
                 markup_row.append(types.InlineKeyboardButton('Бросить кости', callback_data='throw_dice'))
                 keyboard_markup.row(*markup_row)
             elif player.user.state == 'THROW_DICE':
@@ -107,8 +124,17 @@ class PlayerTurnKeyboard(object):
                     keyboard_markup.row(*markup_row)
             elif player.user.state == 'CONFIRM_ACCUSE':
                     markup_row = []
-                    markup_row.append(types.InlineKeyboardButton('Высказать подозрение', callback_data=f'{{"suspiction": {{"place":{game.accused_place.id}}}, {{"person": {game.accused_person.id}}}, {{"weapon": {game.accused_weapon.id}}} }}'))
-                    markup_row.append(types.InlineKeyboardButton('Выдвинуть обвинение', callback_data=f'{{"accuse": {{"place":{game.accused_place.id}}}, {{"person": {game.accused_person.id}}}, {{"weapon": {game.accused_weapon.id}}} }}'))
+                    markup_row.append(types.InlineKeyboardButton('Высказать подозрение', callback_data=f'{{"suspiction": {{"place":{game.accused_place.id}, "person": {game.accused_person.id}, "weapon": {game.accused_weapon.id}}} }}'))
+                    markup_row.append(types.InlineKeyboardButton('Выдвинуть обвинение', callback_data=f'{{"accuse": {{"place":{game.accused_place.id}, "person": {game.accused_person.id}, "weapon": {game.accused_weapon.id}}} }}'))
+                    keyboard_markup.row(*markup_row)
+        elif player.user.id == next_player.user.id:
+            # if player.user.state == 'GAME':
+            #         markup_row = []
+            #         markup_row.append(types.InlineKeyboardButton('Бросить кости', callback_data='throw_dice'))
+            #         keyboard_markup.row(*markup_row)
+            if player.user.state == 'CHECK_SUSPICTION':
+                    markup_row = []
+                    markup_row.append(types.InlineKeyboardButton('Бросить кости', callback_data='throw_dice'))
                     keyboard_markup.row(*markup_row)
             
 

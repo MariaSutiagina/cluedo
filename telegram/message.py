@@ -12,6 +12,7 @@ from botstate import states
 from utils import MediaCache
 from data import models
 from cluedo.game import Game, Player
+from aiogram.utils.exceptions import MessageCantBeEdited, MessageNotModified
 
 
 class BaseContext(object):
@@ -20,6 +21,9 @@ class BaseContext(object):
         self.media_cache: MediaCache = MediaCache()
 
     async def update(self, user: models.User, message_payload: Optional[str] = None, message_id: Optional[int] = None):
+        pass
+
+    async def update_user_state(self, msg_user: models.User, user: models.User, save: bool=False):
         pass
 
     def _get_media(self, message: models.Message) -> Optional[Union[types.InputFile, str]]:
@@ -40,8 +44,12 @@ class BaseContext(object):
     async def send_msg(self, chat_id, message_id, text, keyboard, mode):
         try:
             await self.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, reply_markup=keyboard, parse_mode=mode)
-        except:
+            logging.warning(f'send_msg: edit: chat {chat_id}, message {message_id}')
+        except MessageCantBeEdited as ex:
+            logging.warning(f'send_msg: send: chat {chat_id}, message {message_id}')
             await self.bot.send_message(chat_id=chat_id, text=text, reply_markup=keyboard, parse_mode=mode)
+        except  MessageNotModified as ex:
+            logging.warning(f'not modified: send: chat {chat_id}, message {message_id}')
 
     async def send_all(self, users, message_id, text, keyboard, mode):
         for u in users:
@@ -162,6 +170,7 @@ class GameContext(MessageContext):
         self.accuse_location = kwargs.get('location', -1)
         self.accuse_person = kwargs.get('accuse_person', -1)
         self.accuse_weapon = kwargs.get('accuse_weapon', -1)
+        self.suspiction = kwargs.get('suspiction', None)
 
     def _get_users_in_room(self, users):
         if users:
@@ -226,6 +235,30 @@ class GameContext(MessageContext):
                     'теперь надо либо высказать свои подозрения, либо выдвинуть обвинение\n'
         return ''
 
+    def _get_check_suspiction_text(self, player: Player, player_turn: Player):
+        if player_turn.user.state == 'CHECK_SUSPICTION':
+            refute_players = self.game.reflute_players
+            next_player = self.game.get_next_player()
+            if player == player_turn:
+                if len(refute_players) > 0:
+                    players_text = '\n'.join(map(lambda x: f'{x[0].alias.name}: {x[1].get_name_str()}', refute_players))
+                    return f'Игроки опровергли ваше подозрение:' + '\n' + players_text + '\n\n' + \
+                          f'Ход переходит к игроку {next_player.alias.name}' + '\n' 
+                else:
+                    return f'Никто не опроверг ваше подозрение' + '\n\n' + \
+                           f'Ход переходит к игроку {next_player.alias.name}' + '\n' 
+            else:
+                if len(refute_players) > 0:
+                    players_text = '\n'.join(set(map(lambda x: x[0].alias.name, refute_players)))
+                    return f'Игроки опровергли подозрение:' + '\n' + players_text + '\n\n' + \
+                          f'Ход переходит к игроку {next_player.alias.name}' + '\n'
+                else:
+                    return f'Никто не опроверг подозрение {player_turn.alias.name}' + '\n\n' + \
+                           f'Ход переходит к игроку {next_player.alias.name}' + '\n' 
+            
+
+        return ''
+
     def _compose_player_message(self, 
                player: Player, 
                room_text: str, 
@@ -235,7 +268,8 @@ class GameContext(MessageContext):
                new_location_text: str,
                new_person_text: str,
                new_weapon_text: str,
-               accuse_finished_text: str
+               accuse_finished_text: str,
+               check_suspiction_text: str
                ) -> str:
         if player.user.substate == 0:
             return room_text + \
@@ -248,7 +282,8 @@ class GameContext(MessageContext):
                 new_location_text + \
                 new_person_text + \
                 new_weapon_text + \
-                accuse_finished_text
+                accuse_finished_text + \
+                check_suspiction_text
         elif player.user.substate == 1:
             return room_text + \
                 f"ВЫ: {player.alias.name} ({player.user.name})" + '\n' + \
@@ -258,45 +293,33 @@ class GameContext(MessageContext):
                 new_location_text + \
                 new_person_text + \
                 new_weapon_text + \
-                accuse_finished_text
+                accuse_finished_text + \
+                check_suspiction_text
         else:
             return ''
 
     async def send_message(self, user: models.User, message: models.Message, message_id: Optional[int]) -> None:
+
         player_turn: Player = self.game.get_player_whos_turn()
         users = list(models.User.objects.filter(Q(room=user.room) & ~Q(name=user.name)))
 
         room_text: str = self._get_room_message(user, users)
         turn_text: str = self._get_turn_message(player_turn)
-        for u in users:
-            player: Player = self.game.get_player(u)
-            dice_text: str = self._get_dice_message(player, player_turn)
-            place_text: str = self._get_current_place(player)
-            accuse_location_text: str = self._get_new_location_text(player, player_turn)
-            accuse_person_text: str = self._get_accused_person_text(player, player_turn)
-            accuse_weapon_text: str = self._get_accused_weapon_text(player, player_turn)
-            accuse_finished_text: str = self._get_accuse_finished_text(player, player_turn)
-            player_msg : str = self._compose_player_message(
-                player, 
-                room_text, 
-                turn_text, 
-                place_text, 
-                dice_text, 
-                accuse_location_text,
-                accuse_person_text,
-                accuse_weapon_text,
-                accuse_finished_text)
-            keyboard, mode = PlayerTurnKeyboard.get_markup(message, player, player_turn, self.game)
-
-            await self.send_msg(u.chat_id, u.last_message_id, player_msg, keyboard, mode)
 
         player: Player = self.game.get_player(user)
+        logging.info(f'send_message: user: {user.id}:{user.name}, message {message_id}, state:{user.state}:{user.substate}')
+        logging.info(f'send_message: game turn:{self.game.turn_number}')
+        logging.info(f'send_message: player: {player.alias.name}, id: {player.id}, number: {player.number}')
+        logging.info(f'send_message: player_turn: {player_turn.alias.name}, id:{player_turn.id}, number:{player.number}')
+
+
         dice_text: str = self._get_dice_message(player, player_turn)
         place_text: str = self._get_current_place(player)
         accuse_location_text: str = self._get_new_location_text(player, player_turn)
         accuse_person_text: str = self._get_accused_person_text(player, player_turn)
         accuse_weapon_text: str = self._get_accused_weapon_text(player, player_turn)
         accuse_finished_text: str = self._get_accuse_finished_text(player, player_turn)
+        check_suspiction_text: str = self._get_check_suspiction_text(player, player_turn)
         player_msg : str = self._compose_player_message(
             player, 
             room_text, 
@@ -306,15 +329,47 @@ class GameContext(MessageContext):
             accuse_location_text,
             accuse_person_text,
             accuse_weapon_text,
-            accuse_finished_text)
+            accuse_finished_text,
+            check_suspiction_text)
         keyboard, mode = PlayerTurnKeyboard.get_markup(message, player, player_turn, self.game)
 
         await self.send_msg(user.chat_id, message_id, player_msg, keyboard, mode)
 
+        await self.game.update_after_send(user)
+        await self.update_user_state(user, user)
         await self.persist_game(user)
 
+        for u in users:
+            await self.update_user_state(user, u, True)
+
+            player = self.game.get_player(u)
+            room_text = self._get_room_message(u, users)
+            dice_text = self._get_dice_message(player, player_turn)
+            place_text = self._get_current_place(player)
+            accuse_location_text = self._get_new_location_text(player, player_turn)
+            accuse_person_text = self._get_accused_person_text(player, player_turn)
+            accuse_weapon_text = self._get_accused_weapon_text(player, player_turn)
+            accuse_finished_text = self._get_accuse_finished_text(player, player_turn)
+            check_suspiction_text = self._get_check_suspiction_text(player, player_turn)
+            player_msg = self._compose_player_message(
+                player, 
+                room_text, 
+                turn_text, 
+                place_text, 
+                dice_text, 
+                accuse_location_text,
+                accuse_person_text,
+                accuse_weapon_text,
+                accuse_finished_text,
+                check_suspiction_text)
+            keyboard, mode = PlayerTurnKeyboard.get_markup(message, player, player_turn, self.game)
+
+            await self.send_msg(u.chat_id, u.last_message_id, player_msg, keyboard, mode)
+
     async def persist_game(self, user: models.User):
+        logging.info(f'persist game: user:{user.id}')
         cluedo_game = await models.CluedoGame.create(
+            user.room.game,
             user.room, 
             self.game.winner,
             self.game.get_secret(), 
@@ -330,8 +385,10 @@ class GameContext(MessageContext):
             )
 
         for p in self.game.players:
+            logging.info(f'persist player: player: {p.id}, user:{p.user.id}, game for user:{user.id}')
             await models.CluedoPlayer.create(
-                user,
+                p.player,
+                p.user,
                 cluedo_game, 
                 p.number,
                 p.dice_throw_result,
@@ -350,12 +407,24 @@ class GameContext(MessageContext):
         if cluedo_game is None:
             self.game = Game(user)
             self.game.create()
-            # await self.persist_game(user)
         else:
             self.game = Game(user)
             self.game.from_model(cluedo_game)
-        self.game.update_state(accused_location=self.accuse_location, accused_person=self.accuse_person, accused_weapon=self.accuse_weapon)
+        self.game.update_state(
+            accused_location=self.accuse_location, 
+            accused_person=self.accuse_person, 
+            accused_weapon=self.accuse_weapon,
+            suspiction = self.suspiction)
         
+    async def update_user_state(self, msg_user: models.User, user: models.User, save: bool=False):
+        if msg_user.state == 'CHECK_SUSPICTION':
+            msg_user.state = 'GAME'
+        elif msg_user.state == 'GAME':
+            if user.state == 'GAME_WAITING' or user.state == 'ROOM':
+                user.state = 'GAME'
+                user.substate = 0
+                if save:
+                    await user.async_save()
         
 
 # class QuizContext(BaseContext):

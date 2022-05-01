@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from typing import Optional, List
+from typing import Dict, Optional, List
 from django.db.models import Q
 
 from .states import State
@@ -275,6 +275,57 @@ class ThrowDiceState(BotState):
         else:
             return self
 
+class  CheckSuspictionState(BotState):
+    def __init__(self, bot: Bot, suspiction: Dict=None) -> None:
+        self.bot = bot
+
+        self.linked_message_name = 'CHECK_SUSPICTION'
+        self.context: Optional[message.MessageContext] = None
+        self.suspiction = suspiction
+
+    async def set_context(self) -> None:
+        linked_message: models.LinkedMessages = await self.get_linked_message()
+        self.context = message.GameContext(self.bot, linked_message, suspiction=self.suspiction)
+        await self.context.init_context()    
+
+    """
+    возвращает новое состояние объекта в зависимости от текущего 
+    """
+    async def update_state(self, user: models.User, message_payload, message_id):
+        if message_payload == 'to_room':
+            user.state = 'ROOM'
+            user.substate = 0
+            state = RoomState(self.bot)
+            await state.set_context()
+            return state
+        elif message_payload == 'throw_dice':
+            user.state = 'THROW_DICE'
+            user.substate = user.substate
+            state = ThrowDiceState(self.bot)
+            await state.set_context()
+            return state
+        elif message_payload == 'hide_state':
+            user.substate = 1
+            return self
+        elif message_payload == 'show_state':
+            user.substate = 0
+            return self
+        else:
+            try:
+                person = json.loads(message_payload)
+                if False: #person.get('accused_weapon', -1) >= 0:
+                    user.state = 'ACCUSE_WEAPON'
+                    user.substate = 0
+                    state = ConfirmAccuseState(self.bot, person['accused_weapon'])
+
+                    await state.set_context()
+                    return state
+                else:
+                    raise ValueError
+            except ValueError as e:
+                return self
+
+
 class  ConfirmAccuseState(BotState):
     def __init__(self, bot: Bot, accused_weapon: int=-1) -> None:
         self.bot = bot
@@ -306,12 +357,15 @@ class  ConfirmAccuseState(BotState):
             return self
         else:
             try:
-                person = json.loads(message_payload)
-                if person.get('accused_weapon', -1) >= 0:
-                    user.state = 'ACCUSE_WEAPON'
-                    user.substate = 0
-                    state = ConfirmAccuseState(self.bot, person['accused_weapon'])
-
+                data = json.loads(message_payload)
+                if data.get('suspiction', None) is not None:
+                    user.state = 'CHECK_SUSPICTION'
+                    state = CheckSuspictionState(self.bot, data['suspiction'])
+                    await state.set_context()
+                    return state
+                elif data.get('accuse', -1) >= 0:
+                    user.state = 'CHECK_ACCUSE'
+                    state = CheckAccuseState(self.bot, data['accuse'])
                     await state.set_context()
                     return state
                 else:
@@ -354,7 +408,6 @@ class  AccuseWeaponState(BotState):
                 person = json.loads(message_payload)
                 if person.get('accused_weapon', -1) >= 0:
                     user.state = 'CONFIRM_ACCUSE'
-                    user.substate = 0
                     state = ConfirmAccuseState(self.bot, person['accused_weapon'])
 
                     await state.set_context()
@@ -398,7 +451,6 @@ class  AccusePersonState(BotState):
                 person = json.loads(message_payload)
                 if person.get('accused_person', -1) >= 0:
                     user.state = 'ACCUSE_WEAPON'
-                    user.substate = 0
                     state = AccuseWeaponState(self.bot, person['accused_person'])
 
                     await state.set_context()
@@ -441,7 +493,6 @@ class  SelectPlaceState(BotState):
                 place = json.loads(message_payload)
                 if place.get('new_location', -1) >= 0:
                     user.state = 'ACCUSE_PERSON'
-                    user.substate = 0
                     state = AccusePersonState(self.bot, place['new_location'])
 
                     await state.set_context()
@@ -596,6 +647,12 @@ class Machine(object):
         elif user.state == State.CONFIRM_ACCUSE.name:
             state = ConfirmAccuseState(self.bot)
             await state.set_context()
+        elif user.state == State.CHECK_SUSPICTION.name:
+            state = CheckSuspictionState(self.bot)
+            await state.set_context()
+        elif user.state == State.CHECK_ACCUSE.name:
+            state = CheckAccuseState(self.bot)
+            await state.set_context()
         else:
             state = GreetingState(self.bot)
             await state.set_context()
@@ -607,12 +664,14 @@ class Machine(object):
         user: models.User = await self._get_user_by_message(tg_message)
         state: BotState = await self._get_current_state(user)
         new_state: BotState = await state.update_state(user, tg_message.text, tg_message.message_id)
+        logging.info(f'message: User {user.id}:{user.name}, message {tg_message.message_id} got new state {user.state}:{user.substate}')
         await new_state.handler(user, tg_message.text, tg_message.message_id, outcoming_flag=False)
 
     async def callback_handler(self, callback_query: types.CallbackQuery) -> None:
         user: models.User = await self._get_user_by_message(callback_query.message)
         state: BotState = await self._get_current_state(user)
         new_state: BotState = await state.update_state(user, str(callback_query.data), callback_query.message.message_id)
+        logging.info(f'callback: User {user.id}:{user.name}, message {callback_query.message.message_id} got new state {user.state}:{user.substate}')
         await new_state.handler(user, str(callback_query.data), callback_query.message.message_id, outcoming_flag=False)
 
     async def reset_user_by_message(self, tg_message: types.Message) -> None:

@@ -1,5 +1,6 @@
 import functools
 from typing import List
+from unicodedata import name
 from django.db import models
 from django.db.models import Q
 from aiogram import types
@@ -28,11 +29,14 @@ class CluedoGame(models.Model):
 
     @classmethod
     @sync_to_async
-    def create(cls, room: 'CluedoRoom'=None, winner: 'User'=None, 
+    def create(cls, old_game: 'CluedoGame'=None, room: 'CluedoRoom'=None, winner: 'User'=None, 
             secret: str = '', distances: str = '', open_cards:str='', started:bool=False, alive:int=0, won:bool=True,
             turn_number:int=0,
             accused_place: 'CluedoPlace' = None, accused_person: 'CluedoPerson'=None, accused_weapon: 'CluedoWeapon'=None) -> 'CluedoGame':
-        game: 'CluedoGame' = cls()
+        if old_game is not None:
+            game: 'CluedoGame' = old_game
+        else:
+            game: 'CluedoGame' = cls()
         game.room = room
         game.winner = winner
         game.secret = secret
@@ -70,10 +74,13 @@ class CluedoPlayer(models.Model):
 
     @classmethod
     @sync_to_async
-    def create(cls, user: 'User'=None, game: CluedoGame=-1, number:int=-1, dice_throw_result:int=None, place: 'CluedoPlace'=None, alias: 'CluedoPerson'=None, alive:bool = True, 
+    def create(cls, old_player: 'CluedoPlayer'=None, user: 'User'=None, game: CluedoGame=-1, number:int=-1, dice_throw_result:int=None, place: 'CluedoPlace'=None, alias: 'CluedoPerson'=None, alive:bool = True, 
                     cards: str='', known_cards: str=''):
-        player: 'CluedoPlayer' = cls()
-        player.user = user
+        if old_player is not None:
+            player = old_player
+        else:
+            player: 'CluedoPlayer' = cls()
+            player.user = user
         player.game = game
         player.number = number
         player.dice_throw_result = dice_throw_result
@@ -127,6 +134,9 @@ class CluedoPerson(models.Model):
     def get_room_people(room: CluedoRoom) -> 'CluedoPeople':
         return CluedoPerson.objects.filter(room=room).order_by('id')
 
+    def get_name_str(self):
+        return 'подозреваемый:' + self.name
+
     def __str__(self):
         return self.name
 
@@ -142,6 +152,9 @@ class CluedoPlace(models.Model):
     def get_room_places(room: CluedoRoom) -> 'CluedoPlaces':
         return CluedoPlace.objects.filter(room=room).order_by('id')
 
+    def get_name_str(self):
+        return 'место:' + self.name
+        
     def __str__(self):
         return self.name
 
@@ -156,6 +169,9 @@ class CluedoWeapon(models.Model):
     def get_room_weapons(room: CluedoRoom) -> 'CluedoWeapons':
         return CluedoWeapon.objects.filter(room=room).order_by('id')
 
+    def get_name_str(self):
+        return 'орудие:' + self.name
+        
     def __str__(self):
         return self.name
 
@@ -194,10 +210,6 @@ class User(models.Model):
     def async_save(self) -> None:
         self.save()
 
-    @staticmethod
-    def get_task_list(user: 'User') -> List[str]:
-        SEPARATOR: str = '#'
-        return user.solved_task_list.split(SEPARATOR)
 
 
 class Message(models.Model):

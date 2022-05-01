@@ -14,6 +14,8 @@ class State(Enum):
     ACCUSE_PERSON: int = auto()
     ACCUSE_WEAPON: int = auto()
     CONFIRM_ACCUSE: int = auto()
+    CHECK_SUSPICTION: int = auto()
+    CHECK_ACCUSE: int = auto()
     
     # DASHBOARD: int = auto()
     # QUIZ: int = auto()

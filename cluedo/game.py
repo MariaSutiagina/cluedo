@@ -1,4 +1,5 @@
 import json
+import logging
 import random as rd
 from typing import Dict, List, Union
 from cluedo.distances import Distances
@@ -21,11 +22,15 @@ class Player:
         self.place = None
         self.alias = None
         self.game = None
+        self.player = None
 
         self.id = user.id
         self.username = user.name
+
         if self.username is None:
             self.username = ''
+
+        self.reflute_players = None
 
     def populate_accessible_places(self, places: List[models.CluedoPlace], distances: Distances):
         self.accessible_places = []
@@ -84,19 +89,23 @@ class Game:
         self.cards = self.field.cards()
         rd.shuffle(self.cards)
 
+        logging.info(f'game create for user: {self.user.name}:{self.user.id}')
         users: List[models.User] = list(models.User.objects.filter(room=self.user.room))
         rd.shuffle(users)
         for p in users:
             if p.id == self.user.id:
-                self.players.append(Player(self.user))
+                pp = Player(self.user)
             else:
-                self.players.append(Player(p))
+                pp = Player(p)
+            self.players.append(pp)
+            logging.info(f'player create: user:{pp.user.id} for game {self.user.id}')
 
         for c in self.secret.values():
             self.cards.remove(c)
 
         self.alive = len(self.players)
         self.n = len(self.players)
+        self.turn_number = rd.randint(0,self.n-1)
         self.opencards = self.cards[:self.am_open[self.n]]
         aliases = self.field.get_people()[:]
         places = self.field.get_places()[:]
@@ -138,7 +147,7 @@ class Game:
 
     def get_player(self, user: models.User):
         for p in self.players:
-            if p.user == user:
+            if p.user.id == user.id:
                 return p
         return None
 
@@ -189,6 +198,8 @@ class Game:
             if p.user.id == self.user.id:
                 p.user = self.user
             player = Player(p.user)
+            player.player = pp
+            logging.info(f'player load: user:{pp.user.id} in game {self.user.id}')
             player.alive = p.alive
             player.number = p.number
             player.game = game
@@ -199,6 +210,7 @@ class Game:
             self.parse_cards(player, p.cards)
             self.parse_known_cards(player, p.known_cards)
 
+
             self.players.append(player)
         
     def from_model(self, game: models.CluedoGame):
@@ -206,6 +218,7 @@ class Game:
         rd.shuffle(self.cards)
 
         self.place_distances = Distances.get_from_string(game.distances)
+        logging.info(f'game load for user: {self.user.name}:{self.user.id}')
         self.parse_players(game)
         self.parse_secret(game.secret)
         self.parse_opencards(game.open_cards)
@@ -219,6 +232,23 @@ class Game:
         self.accused_person = game.accuse_person
         self.accused_place = game.accuse_place
         self.accused_weapon = game.accuse_weapon
+
+    def get_next_player(self):
+        next_turn = (self.turn_number + 1) % self.n
+        for p in self.players:
+            if p.number == next_turn:
+                return p
+        return None
+
+    async def next_turn(self):
+        self.turn_number = (self.turn_number + 1) % self.n
+
+    async def update_after_send(self, user: models.User):
+        if self.user.state == 'CHECK_SUSPICTION':
+            # player: Player = self.get_player_whos_turn()
+            await self.next_turn()
+
+    
 
     def update_state(self, **kwargs):
         if self.user.state == 'THROW_DICE':
@@ -238,3 +268,32 @@ class Game:
             player: Player = self.get_player_whos_turn()
             if kwargs.get('accused_weapon', -1) >= 0:
                 self.accused_weapon = models.CluedoWeapon.objects.filter(id=kwargs['accused_weapon']).first()
+        elif self.user.state == 'CHECK_SUSPICTION':
+            player: Player = self.get_player_whos_turn()
+            if kwargs.get('suspiction', None) is not None:
+                player.place = models.CluedoPlace.objects.filter(id=kwargs['suspiction']['place']).first()
+                self.accused_place = player.place
+                self.accused_person = models.CluedoPerson.objects.filter(id=kwargs['suspiction']['person']).first()
+                self.accused_weapon = models.CluedoWeapon.objects.filter(id=kwargs['suspiction']['weapon']).first()
+                self.check_suspiction()
+        elif self.user.state == 'CHECK_ACCUSE':
+            player: Player = self.get_player_whos_turn()
+            if kwargs.get('suspiction', None) is not None:
+                # self.accused_weapon = models.CluedoWeapon.objects.filter(id=kwargs['accused_weapon']).first()
+                pass
+
+    def check_suspiction(self) -> List[Player]:
+        lfc_place = lambda x: type(x) is models.CluedoPlace and self.accused_place.id == x.id
+        lfc_person = lambda x: type(x) is models.CluedoPerson and self.accused_person.id == x.id
+        lfc_weapon = lambda x: type(x) is models.CluedoWeapon and self.accused_weapon.id == x.id
+        lf_place = lambda y: next(filter(lfc_place, y.cards), None) is not None
+        lf_person = lambda y: next(filter(lfc_person, y.cards), None) is not None
+        lf_weapon = lambda y: next(filter(lfc_weapon, y.cards), None) is not None
+        players = list(filter(lambda z: lf_place(z) or lf_person(z) or lf_weapon(z), self.players))
+        self.reflute_players = []
+        for pp in players:
+            self.reflute_players.extend(map(lambda x: (pp, x), filter(lfc_place, pp.cards)))
+            self.reflute_players.extend(map(lambda x: (pp, x), filter(lfc_person, pp.cards)))
+            self.reflute_players.extend(map(lambda x: (pp, x), filter(lfc_weapon, pp.cards)))
+            
+        return self.reflute_players
