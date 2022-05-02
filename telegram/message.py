@@ -198,28 +198,28 @@ class GameContext(MessageContext):
 
     def _get_dice_message(self, player: Player, player_turn: Player) -> str:
         if player_turn.user.state == 'THROW_DICE':
-            if player == player_turn:
+            if player.user.id == player_turn.user.id:
                 return f'ВЫ бросили кости.\nВам выпало {player.dice_throw_result}. Вы можете выбрать одну из локаций: '+'\n'+f'{self._get_accessible_places(player)}' + '\n'
             else: 
-                return f'{player_turn.alias} бросил(а,о,и) кости.'+'\n' + f'Выпало {player.dice_throw_result}. {player_turn.alias}  выбирает новую комнату' + '\n'
+                return f'{player_turn.alias} бросил(а,о,и) кости.'+'\n' + f'Выпало {player_turn.dice_throw_result}. {player_turn.alias}  выбирает новую комнату' + '\n'
         else:
             return ''
         
     def _get_new_location_text(self, player: Player, player_turn: Player):
         if player_turn.user.state == 'SELECT_PLACE':
-            if player == player_turn:
+            if player.user.id == player_turn.user.id:
                 return f'{player.alias.name}, выберите локацию с местом преступления:' + '\n'
         return ''
 
     def _get_accused_person_text(self, player: Player, player_turn: Player):
         if player_turn.user.state == 'ACCUSE_PERSON':
-            if player == player_turn:
+            if player.user.id == player_turn.user.id:
                 return f'{player.alias.name}, ваша текущая локация - предполагаемое место преступления'+'\nтеперь вам надо выбрать подозреваемого:\n'
         return ''
 
     def _get_accused_weapon_text(self, player: Player, player_turn: Player):
         if player_turn.user.state == 'ACCUSE_WEAPON':
-            if player == player_turn:
+            if player.user.id == player_turn.user.id:
                 return f'{player.alias.name}, итак, место преступления - {self.game.accused_place}, '+ \
                        '\n' + f'подозреваемый - {self.game.accused_person}'+ \
                        '\n' + 'теперь надо выбрать орудие преступления\n'
@@ -227,7 +227,7 @@ class GameContext(MessageContext):
 
     def _get_accuse_finished_text(self, player: Player, player_turn: Player):
         if player_turn.user.state == 'CONFIRM_ACCUSE':
-            if player == player_turn:
+            if player.user.id == player_turn.user.id:
                 return f'Вы, {player_turn.alias.name}, сформировали свои подозрения - ' + '\n' + \
                     f'Место преступления: {self.game.accused_place}, ' + '\n' + \
                     f'Подозреваемый: {self.game.accused_person}, ' + '\n' + \
@@ -239,7 +239,7 @@ class GameContext(MessageContext):
         if player_turn.user.state == 'CHECK_SUSPICTION':
             refute_players = self.game.reflute_players
             next_player = self.game.get_next_player()
-            if player == player_turn:
+            if player.user.id == player_turn.user.id:
                 if len(refute_players) > 0:
                     players_text = '\n'.join(map(lambda x: f'{x[0].alias.name}: {x[1].get_name_str()}', refute_players))
                     return f'Игроки опровергли ваше подозрение:' + '\n' + players_text + '\n\n' + \
@@ -362,7 +362,7 @@ class GameContext(MessageContext):
                 accuse_weapon_text,
                 accuse_finished_text,
                 check_suspiction_text)
-            keyboard, mode = PlayerTurnKeyboard.get_markup(message, player, player_turn, self.game)
+            keyboard, mode = PlayerTurnKeyboard.get_markup(message, player, self.game.get_player_whos_turn(), self.game)
 
             await self.send_msg(u.chat_id, u.last_message_id, player_msg, keyboard, mode)
 
@@ -417,10 +417,16 @@ class GameContext(MessageContext):
             suspiction = self.suspiction)
         
     async def update_user_state(self, msg_user: models.User, user: models.User, save: bool=False):
-        if msg_user.state == 'CHECK_SUSPICTION':
+        player: Player = self.game.get_player(user)
+        player_turn: Player = self.game.get_player_whos_turn()
+        if msg_user.state == 'CHECK_SUSPICTION' or msg_user.state == 'GAME':
             msg_user.state = 'GAME'
+            if user.id != msg_user.id and player.user.id == player_turn.user.id and (user.state == 'GAME_WAITING' or user.state == 'GAME'):
+                user.state = 'GAME'
+                if save:
+                    await user.async_save()
         elif msg_user.state == 'GAME':
-            if user.state == 'GAME_WAITING' or user.state == 'ROOM':
+            if user.id != msg_user.id and (user.state == 'GAME_WAITING' or user.state == 'ROOM'):
                 user.state = 'GAME'
                 user.substate = 0
                 if save:

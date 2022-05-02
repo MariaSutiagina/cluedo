@@ -242,10 +242,11 @@ class Game:
 
     async def next_turn(self):
         self.turn_number = (self.turn_number + 1) % self.n
+        p = self.get_player_whos_turn()
+        p.dice_throw_result = -1
 
     async def update_after_send(self, user: models.User):
         if self.user.state == 'CHECK_SUSPICTION':
-            # player: Player = self.get_player_whos_turn()
             await self.next_turn()
 
     
