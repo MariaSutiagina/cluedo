@@ -113,12 +113,12 @@ class PlayerTurnKeyboard(object):
                     markup_row.append(types.InlineKeyboardButton(place.name, callback_data=f'{{"new_location": {place.id}}}'))
                     keyboard_markup.row(*markup_row)
             elif player.user.state == 'ACCUSE_PERSON':
-                for person in filter(lambda x: type(x) is models.CluedoPerson, player.cards):
+                for person in filter(lambda x: type(x) is models.CluedoPerson, game.cards):
                     markup_row = []
                     markup_row.append(types.InlineKeyboardButton(person.name, callback_data=f'{{"accused_person": {person.id}}}'))
                     keyboard_markup.row(*markup_row)
             elif player.user.state == 'ACCUSE_WEAPON':
-                for weapon in filter(lambda x: type(x) is models.CluedoWeapon, player.cards):
+                for weapon in filter(lambda x: type(x) is models.CluedoWeapon, game.cards):
                     markup_row = []
                     markup_row.append(types.InlineKeyboardButton(weapon.name, callback_data=f'{{"accused_weapon": {weapon.id}}}'))
                     keyboard_markup.row(*markup_row)
@@ -127,6 +127,8 @@ class PlayerTurnKeyboard(object):
                     markup_row.append(types.InlineKeyboardButton('Высказать подозрение', callback_data=f'{{"suspiction": {{"place":{game.accused_place.id}, "person": {game.accused_person.id}, "weapon": {game.accused_weapon.id}}} }}'))
                     markup_row.append(types.InlineKeyboardButton('Выдвинуть обвинение', callback_data=f'{{"accuse": {{"place":{game.accused_place.id}, "person": {game.accused_person.id}, "weapon": {game.accused_weapon.id}}} }}'))
                     keyboard_markup.row(*markup_row)
+            elif player.user.state == 'GAME_FINISHED':
+                    pass
         elif player.user.id == next_player.user.id:
             # if player.user.state == 'GAME':
             #         markup_row = []

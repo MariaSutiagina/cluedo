@@ -258,6 +258,40 @@ class GameContext(MessageContext):
 
         return ''
 
+    def _get_check_accuse_text(self, player: Player, player_turn: Player, next_player: Player):
+        if player_turn.user.state == 'CHECK_ACCUSE':
+            accuse_matches = self.game.accuse_matches
+            if player.user.id == player_turn.user.id:
+                if accuse_matches:
+                    return f'ВЫ ВЫИГРАЛИ !!!' + '\n' + 'действительно,\n\n' + \
+                          f'Преступник: {self.game.accused_person.name}' + '\n' + \
+                          f'Место преступления: {self.game.accused_place.name}' + '\n' + \
+                          f'Орудие преступления: {self.game.accused_place.name}' + '\n\n' + \
+                          f'Поздравляю, {player_turn.alias.name}' + '\n'   
+                else:
+                    return f'ВЫ   П Р О И Г Р А Л И ! ! !\n' + \
+                           f'Вот картина реального преступления:' + '\n' + \
+                           f"Преступник: {self.game.secret['person'].name}" + '\n' + \
+                           f"Место преступления: {self.game.secret['place'].name}" + '\n' + \
+                           f"Орудие преступления: {self.game.secret['weapon'].name}" + '\n\n' + \
+                           'Тогда как вы предположили, что дело было так:\n' + \
+                           f'Преступник: {self.game.accused_person.name}' + '\n' + \
+                           f'Место преступления: {self.game.accused_place.name}' + '\n' + \
+                           f'Орудие преступления: {self.game.accused_weapon.name}' + '\n\n' + \
+                           'Вы выкладываете карты на стол и покидаете игру\n\n' + \
+                           f'Ход переходит к {next_player.alias.name}' + '\n'
+            else:
+                if accuse_matches:
+                    return f'Игрок {player_turn.alias.name} выиграл!!!' + '\n' + \
+                           'Игра завершается. Поздравьте победителя!!!'
+                else:
+                    return f'Игрок {player_turn.alias.name} проиграл' + '\n' + \
+                           'Он выкладывает карты на стол и покидает игру\n' + \
+                           f'Ход переходит к {next_player.alias.name}' + '\n'
+            
+
+        return ''
+
     def _compose_player_message(self, 
                player: Player, 
                room_text: str, 
@@ -268,7 +302,8 @@ class GameContext(MessageContext):
                new_person_text: str,
                new_weapon_text: str,
                accuse_finished_text: str,
-               check_suspiction_text: str
+               check_suspiction_text: str,
+               check_accuse_text: str
                ) -> str:
         if player.user.substate == 0:
             return room_text + \
@@ -282,7 +317,8 @@ class GameContext(MessageContext):
                 new_person_text + \
                 new_weapon_text + \
                 accuse_finished_text + \
-                check_suspiction_text
+                check_suspiction_text + \
+                check_accuse_text
         elif player.user.substate == 1:
             return room_text + \
                 f"ВЫ: {player.alias.name} ({player.user.name})" + '\n' + \
@@ -293,7 +329,8 @@ class GameContext(MessageContext):
                 new_person_text + \
                 new_weapon_text + \
                 accuse_finished_text + \
-                check_suspiction_text
+                check_suspiction_text + \
+                check_accuse_text
         else:
             return ''
 
@@ -322,6 +359,7 @@ class GameContext(MessageContext):
         accuse_weapon_text: str = self._get_accused_weapon_text(player, player_turn)
         accuse_finished_text: str = self._get_accuse_finished_text(player, player_turn)
         check_suspiction_text: str = self._get_check_suspiction_text(player, player_turn, next_player)
+        check_accuse_text: str = self._get_check_accuse_text(player, player_turn, next_player)
         player_msg : str = self._compose_player_message(
             player, 
             room_text, 
@@ -332,7 +370,8 @@ class GameContext(MessageContext):
             accuse_person_text,
             accuse_weapon_text,
             accuse_finished_text,
-            check_suspiction_text)
+            check_suspiction_text,
+            check_accuse_text)
         keyboard, mode = PlayerTurnKeyboard.get_markup(message, player, player_turn, self.game)
 
         await self.send_msg(user.chat_id, message_id, player_msg, keyboard, mode)
@@ -353,6 +392,7 @@ class GameContext(MessageContext):
             accuse_weapon_text = self._get_accused_weapon_text(player, player_turn)
             accuse_finished_text = self._get_accuse_finished_text(player, player_turn)
             check_suspiction_text = self._get_check_suspiction_text(player, player_turn, next_player)
+            check_accuse_text: str = self._get_check_accuse_text(player, player_turn, next_player)
             player_msg = self._compose_player_message(
                 player, 
                 room_text, 
@@ -363,7 +403,8 @@ class GameContext(MessageContext):
                 accuse_person_text,
                 accuse_weapon_text,
                 accuse_finished_text,
-                check_suspiction_text)
+                check_suspiction_text,
+                check_accuse_text)
             keyboard, mode = PlayerTurnKeyboard.get_markup(message, player, self.game.get_player_whos_turn(), self.game)
 
             await self.send_msg(u.chat_id, u.last_message_id, player_msg, keyboard, mode)
@@ -428,6 +469,19 @@ class GameContext(MessageContext):
                 user.state = 'GAME'
                 if save:
                     await user.async_save()
+        elif msg_user.state == 'CHECK_ACCUSE' or msg_user.state == 'GAME_FINISHED':
+            if self.game.accuse_matches:
+                msg_user.state = 'GAME_FINISHED'
+                if user.id != msg_user.id and player.user.id == player_turn.user.id and (user.state == 'GAME_WAITING' or user.state == 'GAME'):
+                    user.state = 'GAME_FINISHED'
+                    if save:
+                        await user.async_save()
+            else:
+                msg_user.state = 'GAME_FINISHED'
+                if user.id != msg_user.id and player.user.id == player_turn.user.id and (user.state == 'GAME_WAITING' or user.state == 'GAME'):
+                    user.state = 'GAME'
+                    if save:
+                        await user.async_save()
         elif msg_user.state == 'GAME':
             if user.id != msg_user.id and (user.state == 'GAME_WAITING' or user.state == 'ROOM'):
                 user.state = 'GAME'

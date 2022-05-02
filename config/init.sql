@@ -11,7 +11,8 @@ insert into data_linkedmessages(name, "group") values
 ('ACCUSE_WEAPON','accuse_weapon'),
 ('CONFIRM_ACCUSE','confirm_accuse'),
 ('CHECK_SUSPICTION','check_suspiction'),
-('CHECK_ACCUSE','check_accuse')
+('CHECK_ACCUSE','check_accuse'),
+('GAME_FINISHED','game_finished')
 ;
 
 
@@ -205,7 +206,13 @@ insert into data_message(name, text_content, media_name, "group", "order", actio
  '020-check-accuse.jpg', 
  'check_accuse', 
  20, 
- '{"R0:C0":{"type":"button", "name":"Показать состояние", "action":"show_state"},"R0:C1":{"type":"button", "name":"Прервать игру", "action":"to_room"}}')
+ '{"R0:C0":{"type":"button", "name":"Показать состояние", "action":"show_state"},"R0:C1":{"type":"button", "name":"Прервать игру", "action":"to_room"}}'),
+ ('010-game-finished', 
+ '',
+ '010-game-finished.jpg', 
+ 'game_finished', 
+ 10, 
+ '{"R0:C0":{"type":"button", "name":"Ожидание завершения игры", "action":"infinite_waiting"}}')
  ;
 
 

@@ -16,7 +16,6 @@ class State(Enum):
     CONFIRM_ACCUSE: int = auto()
     CHECK_SUSPICTION: int = auto()
     CHECK_ACCUSE: int = auto()
+    GAME_FINISHED: int = auto()
     
-    # DASHBOARD: int = auto()
-    # QUIZ: int = auto()
     EXIT: int = auto()

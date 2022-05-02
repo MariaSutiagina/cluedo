@@ -65,9 +65,10 @@ class Player:
 
     def update_known_cards(self, reflute_players):
         if self.user.state == 'CHECK_SUSPICTION' or self.user.state == 'GAME':
-            if reflute_players:
+            if reflute_players is not None:
                 for pp in reflute_players:
                     self.known_cards.append(pp[1])
+
 
 
 class Game:
@@ -83,12 +84,13 @@ class Game:
         self.won = False
         self.winner = None
 
-        self.accused_place = None
-        self.accused_person = None
-        self.accused_weapon = None
+        self.accused_place: models.CluedoPlace = None
+        self.accused_person: models.CluedoPerson = None
+        self.accused_weapon: models.CluedoWeapon = None
 
         self.turn_number = 0 
         self.reflute_players = None
+        self.accuse_matches = None
 
     def create(self):
         self.secret = {'person': rd.choice(self.field.people), 'weapon': rd.choice(self.field.weapons), 'place': rd.choice(self.field.places)}
@@ -107,22 +109,23 @@ class Game:
             self.players.append(pp)
             logging.info(f'player create: user:{pp.user.id} for game {self.user.id}')
 
+        deal_cards = self.cards.copy()
         for c in self.secret.values():
-            self.cards.remove(c)
+            deal_cards.remove(c)
 
         self.alive = len(self.players)
         self.n = len(self.players)
         self.turn_number = rd.randint(0,self.n-1)
-        self.opencards = self.cards[:self.am_open[self.n]]
+        self.opencards = deal_cards[:self.am_open[self.n]]
         aliases = self.field.get_people()[:]
         places = self.field.get_places()[:]
 
-        deal_size = (len(self.cards) - self.am_open[self.n]) // self.n
+        deal_size = (len(deal_cards) - self.am_open[self.n]) // self.n
         for player_idx in range(self.n):
             player: Player = self.players[player_idx]
             player.number = player_idx
             player.dice_throw_result = -1
-            deal = self.cards[self.am_open[self.n] + player_idx * deal_size: self.am_open[self.n] + (player_idx + 1) * deal_size]
+            deal = deal_cards[self.am_open[self.n] + player_idx * deal_size: self.am_open[self.n] + (player_idx + 1) * deal_size]
             player.set_cards(deal)
             player.add_known_cards(deal)
 
@@ -184,9 +187,9 @@ class Game:
 
         self.secret = d
 
-        for c in self.secret.values():
-            cc = list(filter(lambda x: (x.name == c.name), self.cards))[0]
-            self.cards.remove(cc)
+        # for c in self.secret.values():
+        #     cc = list(filter(lambda x: (x.name == c.name), self.cards))[0]
+        #     self.cards.remove(cc)
 
 
     def parse_opencards(self, cards: str) -> List[Union[models.CluedoPerson, models.CluedoPlace, models.CluedoWeapon]]:
@@ -241,20 +244,46 @@ class Game:
         self.accused_weapon = game.accuse_weapon
 
     def get_next_player(self):
-        next_turn = (self.turn_number + 1) % self.n
-        for p in self.players:
-            if p.number == next_turn:
-                return p
+        index = 0
+        next_turn = self.turn_number
+        while index <= self.n:
+            next_turn = (next_turn + 1) % self.n
+            for p in self.players:
+                if p.number == next_turn:
+                    if p.user.state != 'GAME_FINISHED':
+                        return p
+                    else:
+                        break
+            index += 1
         return None
 
     async def next_turn(self):
-        self.turn_number = (self.turn_number + 1) % self.n
-        p = self.get_player_whos_turn()
-        p.dice_throw_result = -1
+        index = 0
+        while index <= self.n:
+            self.turn_number = (self.turn_number + 1) % self.n
+            p = self.get_player_whos_turn()
+            p.dice_throw_result = -1
+            if p.user.state != 'GAME_FINISHED':
+                return
+            index += 1
+
+
+    async def _update_known_cards_for_players(self):
+        player_turn: Player = self.get_player_whos_turn()
+        for pp in self.players:
+            if pp.user.id != player_turn.user.id:
+                for c in pp.cards:
+                    pp.known_cards.append(c)
 
     async def update_after_send(self, user: models.User):
         if self.user.state == 'CHECK_SUSPICTION':
             await self.next_turn()
+        elif self.user.state == 'CHECK_ACCUSE':
+            if self.accuse_matches is not None:
+                if self.accuse_matches:
+                    pass
+                else:
+                    await self.next_turn()
 
     
 
@@ -287,8 +316,11 @@ class Game:
         elif self.user.state == 'CHECK_ACCUSE':
             player: Player = self.get_player_whos_turn()
             if kwargs.get('suspiction', None) is not None:
-                # self.accused_weapon = models.CluedoWeapon.objects.filter(id=kwargs['accused_weapon']).first()
-                pass
+                player.place = models.CluedoPlace.objects.filter(id=kwargs['suspiction']['place']).first()
+                self.accused_place = player.place
+                self.accused_person = models.CluedoPerson.objects.filter(id=kwargs['suspiction']['person']).first()
+                self.accused_weapon = models.CluedoWeapon.objects.filter(id=kwargs['suspiction']['weapon']).first()
+                self.check_accuse(player)
 
     def check_suspiction(self, player) -> List[Player]:
         lfc_place = lambda x: type(x) is models.CluedoPlace and self.accused_place.id == x.id
@@ -305,3 +337,6 @@ class Game:
             self.reflute_players.extend(map(lambda x: (pp, x), filter(lfc_weapon, pp.cards)))
             
         return self.reflute_players
+
+    def check_accuse(self, player) -> List[Player]:
+        self.accuse_matches = self.accused_person.id == self.secret['person'].id and self.accused_place.id == self.secret['place'].id and self.accused_weapon.id == self.secret['weapon'].id

@@ -326,6 +326,56 @@ class  CheckSuspictionState(BotState):
                 return self
 
 
+class  CheckAccuseState(BotState):
+    def __init__(self, bot: Bot, suspiction: Dict=None) -> None:
+        self.bot = bot
+
+        self.linked_message_name = 'CHECK_ACCUSE'
+        self.context: Optional[message.MessageContext] = None
+        self.suspiction = suspiction
+
+    async def set_context(self) -> None:
+        linked_message: models.LinkedMessages = await self.get_linked_message()
+        self.context = message.GameContext(self.bot, linked_message, suspiction=self.suspiction)
+        await self.context.init_context()    
+
+    """
+    возвращает новое состояние объекта в зависимости от текущего 
+    """
+    async def update_state(self, user: models.User, message_payload, message_id):
+        if message_payload == 'to_room':
+            user.state = 'ROOM'
+            user.substate = 0
+            state = RoomState(self.bot)
+            await state.set_context()
+            return state
+        elif message_payload == 'throw_dice':
+            user.state = 'THROW_DICE'
+            user.substate = user.substate
+            state = ThrowDiceState(self.bot)
+            await state.set_context()
+            return state
+        elif message_payload == 'hide_state':
+            user.substate = 1
+            return self
+        elif message_payload == 'show_state':
+            user.substate = 0
+            return self
+        else:
+            try:
+                person = json.loads(message_payload)
+                if False: #person.get('accused_weapon', -1) >= 0:
+                    user.state = 'ACCUSE_WEAPON'
+                    user.substate = 0
+                    state = ConfirmAccuseState(self.bot, person['accused_weapon'])
+
+                    await state.set_context()
+                    return state
+                else:
+                    raise ValueError
+            except ValueError as e:
+                return self
+
 class  ConfirmAccuseState(BotState):
     def __init__(self, bot: Bot, accused_weapon: int=-1) -> None:
         self.bot = bot
@@ -363,7 +413,7 @@ class  ConfirmAccuseState(BotState):
                     state = CheckSuspictionState(self.bot, data['suspiction'])
                     await state.set_context()
                     return state
-                elif data.get('accuse', -1) >= 0:
+                elif data.get('accuse', None) is not None:
                     user.state = 'CHECK_ACCUSE'
                     state = CheckAccuseState(self.bot, data['accuse'])
                     await state.set_context()
@@ -652,6 +702,9 @@ class Machine(object):
             await state.set_context()
         elif user.state == State.CHECK_ACCUSE.name:
             state = CheckAccuseState(self.bot)
+            await state.set_context()
+        elif user.state == State.GAME_FINISHED.name:
+            state = GameFinishedState(self.bot)
             await state.set_context()
         else:
             state = GreetingState(self.bot)
