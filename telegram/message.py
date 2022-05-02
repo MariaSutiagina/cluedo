@@ -235,10 +235,9 @@ class GameContext(MessageContext):
                     'теперь надо либо высказать свои подозрения, либо выдвинуть обвинение\n'
         return ''
 
-    def _get_check_suspiction_text(self, player: Player, player_turn: Player):
+    def _get_check_suspiction_text(self, player: Player, player_turn: Player, next_player: Player):
         if player_turn.user.state == 'CHECK_SUSPICTION':
             refute_players = self.game.reflute_players
-            next_player = self.game.get_next_player()
             if player.user.id == player_turn.user.id:
                 if len(refute_players) > 0:
                     players_text = '\n'.join(map(lambda x: f'{x[0].alias.name}: {x[1].get_name_str()}', refute_players))
@@ -301,7 +300,10 @@ class GameContext(MessageContext):
     async def send_message(self, user: models.User, message: models.Message, message_id: Optional[int]) -> None:
 
         player_turn: Player = self.game.get_player_whos_turn()
+        next_player: Player = self.game.get_next_player()
         users = list(models.User.objects.filter(Q(room=user.room) & ~Q(name=user.name)))
+
+        player_turn.update_known_cards(self.game.reflute_players)
 
         room_text: str = self._get_room_message(user, users)
         turn_text: str = self._get_turn_message(player_turn)
@@ -312,14 +314,14 @@ class GameContext(MessageContext):
         logging.info(f'send_message: player: {player.alias.name}, id: {player.id}, number: {player.number}')
         logging.info(f'send_message: player_turn: {player_turn.alias.name}, id:{player_turn.id}, number:{player.number}')
 
-
+        
         dice_text: str = self._get_dice_message(player, player_turn)
         place_text: str = self._get_current_place(player)
         accuse_location_text: str = self._get_new_location_text(player, player_turn)
         accuse_person_text: str = self._get_accused_person_text(player, player_turn)
         accuse_weapon_text: str = self._get_accused_weapon_text(player, player_turn)
         accuse_finished_text: str = self._get_accuse_finished_text(player, player_turn)
-        check_suspiction_text: str = self._get_check_suspiction_text(player, player_turn)
+        check_suspiction_text: str = self._get_check_suspiction_text(player, player_turn, next_player)
         player_msg : str = self._compose_player_message(
             player, 
             room_text, 
@@ -350,7 +352,7 @@ class GameContext(MessageContext):
             accuse_person_text = self._get_accused_person_text(player, player_turn)
             accuse_weapon_text = self._get_accused_weapon_text(player, player_turn)
             accuse_finished_text = self._get_accuse_finished_text(player, player_turn)
-            check_suspiction_text = self._get_check_suspiction_text(player, player_turn)
+            check_suspiction_text = self._get_check_suspiction_text(player, player_turn, next_player)
             player_msg = self._compose_player_message(
                 player, 
                 room_text, 
@@ -419,6 +421,7 @@ class GameContext(MessageContext):
     async def update_user_state(self, msg_user: models.User, user: models.User, save: bool=False):
         player: Player = self.game.get_player(user)
         player_turn: Player = self.game.get_player_whos_turn()
+
         if msg_user.state == 'CHECK_SUSPICTION' or msg_user.state == 'GAME':
             msg_user.state = 'GAME'
             if user.id != msg_user.id and player.user.id == player_turn.user.id and (user.state == 'GAME_WAITING' or user.state == 'GAME'):

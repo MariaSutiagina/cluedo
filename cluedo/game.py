@@ -30,7 +30,6 @@ class Player:
         if self.username is None:
             self.username = ''
 
-        self.reflute_players = None
 
     def populate_accessible_places(self, places: List[models.CluedoPlace], distances: Distances):
         self.accessible_places = []
@@ -64,6 +63,13 @@ class Player:
     def get_known_cards_info(self):
         return 'Известные мне карты:' + ', '.join(map(lambda x: f"{x['type']}:{x['name']}", cu.cards_to_info(self.known_cards)))
 
+    def update_known_cards(self, reflute_players):
+        if self.user.state == 'CHECK_SUSPICTION' or self.user.state == 'GAME':
+            if reflute_players:
+                for pp in reflute_players:
+                    self.known_cards.append(pp[1])
+
+
 class Game:
     def __init__(self, user: models.User):
         self.am_open = (0, 0, 0, 0, 0, 0)
@@ -82,6 +88,7 @@ class Game:
         self.accused_weapon = None
 
         self.turn_number = 0 
+        self.reflute_players = None
 
     def create(self):
         self.secret = {'person': rd.choice(self.field.people), 'weapon': rd.choice(self.field.weapons), 'place': rd.choice(self.field.places)}
@@ -276,21 +283,21 @@ class Game:
                 self.accused_place = player.place
                 self.accused_person = models.CluedoPerson.objects.filter(id=kwargs['suspiction']['person']).first()
                 self.accused_weapon = models.CluedoWeapon.objects.filter(id=kwargs['suspiction']['weapon']).first()
-                self.check_suspiction()
+                self.check_suspiction(player)
         elif self.user.state == 'CHECK_ACCUSE':
             player: Player = self.get_player_whos_turn()
             if kwargs.get('suspiction', None) is not None:
                 # self.accused_weapon = models.CluedoWeapon.objects.filter(id=kwargs['accused_weapon']).first()
                 pass
 
-    def check_suspiction(self) -> List[Player]:
+    def check_suspiction(self, player) -> List[Player]:
         lfc_place = lambda x: type(x) is models.CluedoPlace and self.accused_place.id == x.id
         lfc_person = lambda x: type(x) is models.CluedoPerson and self.accused_person.id == x.id
         lfc_weapon = lambda x: type(x) is models.CluedoWeapon and self.accused_weapon.id == x.id
         lf_place = lambda y: next(filter(lfc_place, y.cards), None) is not None
         lf_person = lambda y: next(filter(lfc_person, y.cards), None) is not None
         lf_weapon = lambda y: next(filter(lfc_weapon, y.cards), None) is not None
-        players = list(filter(lambda z: lf_place(z) or lf_person(z) or lf_weapon(z), self.players))
+        players = list(filter(lambda z: (z != player) and (lf_place(z) or lf_person(z) or lf_weapon(z)), self.players))
         self.reflute_players = []
         for pp in players:
             self.reflute_players.extend(map(lambda x: (pp, x), filter(lfc_place, pp.cards)))
