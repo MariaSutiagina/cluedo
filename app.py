@@ -14,7 +14,9 @@ async def on_startup(dp) -> None:
         await bot.set_webhook(WEBHOOK_URL, certificate=types.InputFile(WEBHOOK_CERT))
         logging.info('Certificate was uploaded successfully.')
     else:    
+        logging.info(f'Set webhook: {WEBHOOK_URL}')
         await bot.set_webhook(WEBHOOK_URL)
+        logging.info('Set webhook: done')
 
 
 async def on_shutdown(dp) -> None:
