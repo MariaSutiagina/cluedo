@@ -54,7 +54,7 @@ WEBHOOK_KEY = config_yaml['telegram']['webhook_key']
 
 # webserver settings
 WEBAPP_HOST = config_yaml['server']['host']
-WEBAPP_PORT = config_yaml['server']['port']
+WEBAPP_PORT = os.getenv('PORT', config_yaml['server']['port'])
 
 # django secret key
 SECRET_KEY = os.getenv('DJANGO_SECRET',config_yaml['django']['secret'])
