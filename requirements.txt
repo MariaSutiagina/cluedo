@@ -2,3 +2,4 @@ aiogram==2.19
 Django==4.0.2
 pyaml==21.10.1
 dj-database-url==0.5.0
+psycopg2-binary==2.9.3
