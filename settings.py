@@ -13,7 +13,7 @@ os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
-CONFIG_PATH = os.getenv('CONFIG_PATH', 'config/config.yaml')
+CONFIG_PATH = os.getenv('CONFIG_PATH', 'config/configg.yaml')
 CONFIG_PATH = os.path.join(BASE_DIR, CONFIG_PATH)
 
 with open(CONFIG_PATH, 'r') as f:
