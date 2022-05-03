@@ -12,7 +12,8 @@ insert into data_linkedmessages(name, "group") values
 ('CONFIRM_ACCUSE','confirm_accuse'),
 ('CHECK_SUSPICTION','check_suspiction'),
 ('CHECK_ACCUSE','check_accuse'),
-('GAME_FINISHED','game_finished')
+('GAME_FINISHED','game_finished'),
+('GAME_WON','game_won')
 ;
 
 
@@ -212,7 +213,13 @@ insert into data_message(name, text_content, media_name, "group", "order", actio
  '010-game-finished.jpg', 
  'game_finished', 
  10, 
- '{"R0:C0":{"type":"button", "name":"Ожидание завершения игры", "action":"infinite_waiting"}}')
+ '{"R0:C0":{"type":"button", "name":"Ожидание завершения игры", "action":"infinite_waiting"}}'),
+ ('010-game-won', 
+ '',
+ '010-game-won.jpg', 
+ 'game_won', 
+ 10, 
+ '{"R0:C0":{"type":"button", "name":"Завершить игру", "action":"to_exit"}}')
  ;
 
 
