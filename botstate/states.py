@@ -17,5 +17,6 @@ class State(Enum):
     CHECK_SUSPICTION: int = auto()
     CHECK_ACCUSE: int = auto()
     GAME_FINISHED: int = auto()
+    GAME_WON: int = auto()
     
     EXIT: int = auto()

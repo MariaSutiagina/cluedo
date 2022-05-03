@@ -127,6 +127,13 @@ class PlayerTurnKeyboard(object):
                     markup_row.append(types.InlineKeyboardButton('Высказать подозрение', callback_data=f'{{"suspiction": {{"place":{game.accused_place.id}, "person": {game.accused_person.id}, "weapon": {game.accused_weapon.id}}} }}'))
                     markup_row.append(types.InlineKeyboardButton('Выдвинуть обвинение', callback_data=f'{{"accuse": {{"place":{game.accused_place.id}, "person": {game.accused_person.id}, "weapon": {game.accused_weapon.id}}} }}'))
                     keyboard_markup.row(*markup_row)
+            elif player.user.state == 'CHECK_ACCUSE':
+                    markup_row = []
+                    if game.accuse_matches:
+                        markup_row.append(types.InlineKeyboardButton('Завершить игру', callback_data='to_exit'))
+                    else:
+                        markup_row.append(types.InlineKeyboardButton('Ожидание завершения игры', callback_data='infinite_waiting'))
+                    keyboard_markup.row(*markup_row)
             elif player.user.state == 'GAME_FINISHED':
                     pass
         elif player.user.id == next_player.user.id:

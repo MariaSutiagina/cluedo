@@ -275,6 +275,58 @@ class ThrowDiceState(BotState):
         else:
             return self
 
+class  GameFinishedState(BotState):
+    def __init__(self, bot: Bot, suspiction: Dict=None) -> None:
+        self.bot = bot
+
+        self.linked_message_name = 'GAME_FINISHED'
+        self.context: Optional[message.MessageContext] = None
+        self.suspiction = suspiction
+
+    async def set_context(self) -> None:
+        linked_message: models.LinkedMessages = await self.get_linked_message()
+        self.context = message.GameFinishedContext(self.bot, linked_message)
+        await self.context.init_context()    
+
+    """
+    возвращает новое состояние объекта в зависимости от текущего 
+    """
+    async def update_state(self, user: models.User, message_payload, message_id):
+        if message_payload == 'to_greeting':
+            user.state = 'GREETING'
+            user.substate = 0
+            state = GreetingState(self.bot)
+            await state.set_context()
+            return state
+        else:
+            return self
+
+class  GameWonState(BotState):
+    def __init__(self, bot: Bot, suspiction: Dict=None) -> None:
+        self.bot = bot
+
+        self.linked_message_name = 'GAME_WON'
+        self.context: Optional[message.MessageContext] = None
+        self.suspiction = suspiction
+
+    async def set_context(self) -> None:
+        linked_message: models.LinkedMessages = await self.get_linked_message()
+        self.context = message.GameWonContext(self.bot, linked_message)
+        await self.context.init_context()    
+
+    """
+    возвращает новое состояние объекта в зависимости от текущего 
+    """
+    async def update_state(self, user: models.User, message_payload, message_id):
+        if message_payload == 'to_greeting':
+            user.state = 'GREETING'
+            user.substate = 0
+            state = GreetingState(self.bot)
+            await state.set_context()
+            return state
+        else:
+            return self
+
 class  CheckSuspictionState(BotState):
     def __init__(self, bot: Bot, suspiction: Dict=None) -> None:
         self.bot = bot
@@ -311,20 +363,7 @@ class  CheckSuspictionState(BotState):
             user.substate = 0
             return self
         else:
-            try:
-                person = json.loads(message_payload)
-                if False: #person.get('accused_weapon', -1) >= 0:
-                    user.state = 'ACCUSE_WEAPON'
-                    user.substate = 0
-                    state = ConfirmAccuseState(self.bot, person['accused_weapon'])
-
-                    await state.set_context()
-                    return state
-                else:
-                    raise ValueError
-            except ValueError as e:
-                return self
-
+            return self
 
 class  CheckAccuseState(BotState):
     def __init__(self, bot: Bot, suspiction: Dict=None) -> None:
@@ -362,19 +401,7 @@ class  CheckAccuseState(BotState):
             user.substate = 0
             return self
         else:
-            try:
-                person = json.loads(message_payload)
-                if False: #person.get('accused_weapon', -1) >= 0:
-                    user.state = 'ACCUSE_WEAPON'
-                    user.substate = 0
-                    state = ConfirmAccuseState(self.bot, person['accused_weapon'])
-
-                    await state.set_context()
-                    return state
-                else:
-                    raise ValueError
-            except ValueError as e:
-                return self
+            return self
 
 class  ConfirmAccuseState(BotState):
     def __init__(self, bot: Bot, accused_weapon: int=-1) -> None:
@@ -705,6 +732,9 @@ class Machine(object):
             await state.set_context()
         elif user.state == State.GAME_FINISHED.name:
             state = GameFinishedState(self.bot)
+            await state.set_context()
+        elif user.state == State.GAME_FINISHED.name:
+            state = GameWonState(self.bot)
             await state.set_context()
         else:
             state = GreetingState(self.bot)

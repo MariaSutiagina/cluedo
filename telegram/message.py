@@ -50,6 +50,7 @@ class BaseContext(object):
             await self.bot.send_message(chat_id=chat_id, text=text, reply_markup=keyboard, parse_mode=mode)
         except  MessageNotModified as ex:
             logging.warning(f'not modified: send: chat {chat_id}, message {message_id}')
+            await self.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text+'.\n', reply_markup=keyboard, parse_mode=mode)
 
     async def send_all(self, users, message_id, text, keyboard, mode):
         for u in users:
@@ -137,6 +138,25 @@ class RoomContext(MessageContext):
                     f"{message.text_content}"
 
         keyboard, mode = RoomKeyboard.get_markup(message, user.room)
+        await self.send_msg(user.chat_id, message_id, text, keyboard, mode)
+        for u in users:
+            await self.send_msg(u.chat_id, u.last_message_id, text, keyboard, mode)
+
+class GameFinishedContext(MessageContext):
+
+    async def send_message(self, user: models.User, message: models.Message, message_id: Optional[int]) -> None:
+        text: str = 'Вы проиграли.\nОжидайте завершения игры'
+
+        keyboard, mode =  SimpleKeyboard.get_markup(message)
+        await self.send_msg(user.chat_id, message_id, text, keyboard, mode)
+
+class GameWonContext(MessageContext):
+    async def send_message(self, user: models.User, message: models.Message, message_id: Optional[int]) -> None:
+        users = list(models.User.objects.filter(Q(room=user.room) & ~Q(name=user.name)))
+
+        text: str = 'Вы выиграли.\nЗавершить игру?'
+
+        keyboard, mode =  SimpleKeyboard.get_markup(message)
         await self.send_msg(user.chat_id, message_id, text, keyboard, mode)
         for u in users:
             await self.send_msg(u.chat_id, u.last_message_id, text, keyboard, mode)
@@ -471,7 +491,7 @@ class GameContext(MessageContext):
                     await user.async_save()
         elif msg_user.state == 'CHECK_ACCUSE' or msg_user.state == 'GAME_FINISHED':
             if self.game.accuse_matches:
-                msg_user.state = 'GAME_FINISHED'
+                msg_user.state = 'GAME_WON'
                 if user.id != msg_user.id and player.user.id == player_turn.user.id and (user.state == 'GAME_WAITING' or user.state == 'GAME'):
                     user.state = 'GAME_FINISHED'
                     if save:
@@ -482,6 +502,12 @@ class GameContext(MessageContext):
                     user.state = 'GAME'
                     if save:
                         await user.async_save()
+        elif msg_user.state == 'GAME_WON':
+            if user.id != msg_user.id and (user.state == 'GAME_FINISHED' or user.state == 'GAME_WAITING' or user.state == 'ROOM'):
+                user.state = 'EXIT'
+                user.substate = 0
+                if save:
+                    await user.async_save()
         elif msg_user.state == 'GAME':
             if user.id != msg_user.id and (user.state == 'GAME_WAITING' or user.state == 'ROOM'):
                 user.state = 'GAME'
