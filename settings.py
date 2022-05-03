@@ -4,11 +4,6 @@ from logging.handlers import RotatingFileHandler
 
 import yaml
 
-from argparse import ArgumentParser as AP
-
-parser = AP()
-parser.add_argument('-c', '--config', type=str, dest='config_path', default='config/config.yaml' )
-args = parser.parse_args()
 
 
 
@@ -29,7 +24,8 @@ INSTALLED_APPS = (
     'data',
 )
 
-CONFIG_PATH = os.path.join(BASE_DIR,args.config_path)
+CONFIG_PATH = os.getenv('CONFIG_PATH', 'config/config.yaml')
+CONFIG_PATH = os.path.join(BASE_DIR, CONFIG_PATH)
 
 with open(CONFIG_PATH, 'r') as f:
     config_yaml = yaml.safe_load(f.read())
