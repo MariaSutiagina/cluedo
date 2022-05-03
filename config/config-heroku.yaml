@@ -6,6 +6,7 @@ telegram:
   webhook_cert:
   webhook_key:
 server:
+  type: heroku
   host: 0.0.0.0
   port: 8000
   log_file: ./bot.log
@@ -13,3 +14,8 @@ django:
   secret:
   allowed_hosts:
     - 127.0.0.1
+    - 0.0.0.0
+    - cluedo-bot.herokuapp.com
+db:
+  engine: django.db.backends.sqlite3   
+  url: db.sqlite3

@@ -3,7 +3,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 import yaml
-
+import dj_database_url
 
 
 
@@ -13,22 +13,34 @@ os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
-    }
-}
-
-INSTALLED_APPS = (
-    'data',
-)
-
 CONFIG_PATH = os.getenv('CONFIG_PATH', 'config/config.yaml')
 CONFIG_PATH = os.path.join(BASE_DIR, CONFIG_PATH)
 
 with open(CONFIG_PATH, 'r') as f:
     config_yaml = yaml.safe_load(f.read())
+
+SERVER_TYPE = config_yaml['server']['type']
+
+if SERVER_TYPE == 'selfhosted':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        }
+    }
+elif SERVER_TYPE == 'heroku':
+    DATABASES = {
+        'default': {
+            'ENGINE': '',
+            'NAME': '',
+        }
+    }
+    db_from_env = dj_database_url.config(conn_max_age=500)
+    DATABASES['default'].update(db_from_env)
+
+INSTALLED_APPS = (
+    'data',
+)
 
 API_TOKEN = os.getenv('BOT_TOKEN',config_yaml['telegram']['token'])
 
