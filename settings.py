@@ -5,6 +5,14 @@ from logging.handlers import RotatingFileHandler
 import yaml
 import dj_database_url
 
+LOG_FORMAT = '%(name)s - %(levelname)s - %(asctime)s # %(message)s'
+
+root_logger = logging.getLogger()
+# log_handler = RotatingFileHandler(LOG_FILE, maxBytes=50 * 2 ** 20, backupCount=50)
+console_handler = logging.StreamHandler()                           
+console_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt='%I:%M:%S'))
+root_logger.addHandler(console_handler)
+root_logger.setLevel(logging.INFO)
 
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
@@ -13,8 +21,9 @@ os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
-CONFIG_PATH = os.getenv('CONFIG_PATH', 'config/configg.yaml')
+CONFIG_PATH = os.getenv('CONFIG_PATH', 'config/config.yaml')
 CONFIG_PATH = os.path.join(BASE_DIR, CONFIG_PATH)
+logging.info(CONFIG_PATH)
 
 with open(CONFIG_PATH, 'r') as f:
     config_yaml = yaml.safe_load(f.read())
@@ -65,11 +74,3 @@ LOG_FILE = config_yaml['server']['log_file']
 
 WEBHOOK_URL = f"{WEBHOOK_HOST}:{WEBHOOK_PORT}{WEBHOOK_PATH}"
 
-LOG_FORMAT = '%(name)s - %(levelname)s - %(asctime)s # %(message)s'
-
-root_logger = logging.getLogger()
-# log_handler = RotatingFileHandler(LOG_FILE, maxBytes=50 * 2 ** 20, backupCount=50)
-console_handler = logging.StreamHandler()                           
-console_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt='%I:%M:%S'))
-root_logger.addHandler(console_handler)
-root_logger.setLevel(logging.INFO)
