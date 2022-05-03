@@ -4,6 +4,14 @@ from logging.handlers import RotatingFileHandler
 
 import yaml
 
+from argparse import ArgumentParser as AP
+
+parser = AP()
+parser.add_argument('-c', '--config', type=str, dest='config_path', default='config/config.yaml' )
+args = parser.parse_args()
+
+
+
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
 
@@ -21,12 +29,12 @@ INSTALLED_APPS = (
     'data',
 )
 
-CONFIG_PATH = os.path.join(BASE_DIR, 'config/config.yaml')
+CONFIG_PATH = os.path.join(BASE_DIR,args.config_path)
 
 with open(CONFIG_PATH, 'r') as f:
     config_yaml = yaml.safe_load(f.read())
 
-API_TOKEN = config_yaml['telegram']['token']
+API_TOKEN = os.getenv('BOT_TOKEN',config_yaml['telegram']['token'])
 
 # webhook settings
 WEBHOOK_HOST = config_yaml['telegram']['webhook_host']
@@ -41,7 +49,7 @@ WEBAPP_HOST = config_yaml['server']['host']
 WEBAPP_PORT = config_yaml['server']['port']
 
 # django secret key
-SECRET_KEY = config_yaml['django']['secret']
+SECRET_KEY = os.getenv('DJANGO_SECRET',config_yaml['django']['secret'])
 
 ALLOWED_HOSTS = config_yaml['django']['allowed_hosts']
 

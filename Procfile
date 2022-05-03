@@ -1,0 +1,1 @@
+web: python app.py -c config/config-heroku.yaml
